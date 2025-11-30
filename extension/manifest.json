@@ -16,6 +16,7 @@
     {
       "matches": ["<all_urls>"],
       "js": [
+        "version.js",
         "config.js",
         "content/jwt-manager.js",
         "content/api-client.js",

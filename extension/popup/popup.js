@@ -51,6 +51,16 @@
   init();
 
   async function init() {
+    // 显示版本信息
+    if (window.VOCAB_HELPER_VERSION) {
+      console.log(`[Popup] ${window.getVersionInfo()}`);
+      // 更新footer版本号
+      const footerEl = document.getElementById('footerVersion');
+      if (footerEl) {
+        footerEl.textContent = `Spooky Vocab ${window.getVersionInfo()}`;
+        footerEl.title = `Build: ${window.VOCAB_HELPER_VERSION.buildDate}\nMode: ${window.VOCAB_HELPER_VERSION.mode}`;
+      }
+    }
     console.log('[Popup] Initializing...');
     
     // 加载API配置

@@ -23,7 +23,14 @@
     }
   }
 
-  log('Initializing...', { isMobile });
+  // 显示版本信息
+  if (window.VOCAB_HELPER_CONFIG && window.VOCAB_HELPER_CONFIG.DEBUG_MODE) {
+    console.log('\n' + window.getVersionBanner() + '\n');
+    console.log(`[VocabHelper] Version: ${window.getVersionInfo()}`);
+    console.log(`[VocabHelper] Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
+  }
+
+  log('Initializing...');
 
   // 检查插件是否启用
   chrome.storage.local.get(['enabled'], (result) => {
