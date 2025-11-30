@@ -359,7 +359,7 @@
     }
 
     log(...args) {
-      if (window.VOCAB_HELPER_CONFIG && window.VOCAB_HELPER_CONFIG.debug) {
+      if (window.VOCAB_HELPER_CONFIG && window.VOCAB_HELPER_CONFIG.DEBUG_MODE) {
         console.log('[TranslationTooltip]', ...args);
       }
     }
