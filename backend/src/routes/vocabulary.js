@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const { userDb, dbGet, dbRun, dbAll } = require('../utils/database');
+const dictionaryService = require('../services/dictionary');
 
 // Apply auth middleware to all routes
 router.use(authMiddleware);
@@ -100,6 +101,12 @@ router.post('/batch-check', async (req, res) => {
 
     const userLevel = userSettings?.cefr_level || 'B1';
 
+    // Batch lookup translations if dictionary available
+    let dictEntries = {};
+    if (dictionaryService.isReady()) {
+      dictEntries = await dictionaryService.batchLookup(words);
+    }
+
     const results = {};
 
     for (const word of words) {
@@ -111,8 +118,23 @@ router.post('/batch-check', async (req, res) => {
         WHERE user_id = ? AND word = ?
       `, [user_id, lowerWord]);
 
-      // 使用简单判断逻辑
-      const judgment = simpleWordJudgment(lowerWord, userLevel, wordRecord);
+      // Get dictionary entry
+      const dictEntry = dictEntries[lowerWord];
+      
+      // Calculate initial score using dictionary data if available
+      let initialScore;
+      if (dictEntry && !wordRecord) {
+        // Use dictionary-based scoring
+        const difficulty = await dictionaryService.getDifficulty(lowerWord);
+        initialScore = difficulty.score;
+      } else if (wordRecord) {
+        // Use existing score
+        initialScore = wordRecord.familiarity_score;
+      } else {
+        // Fallback to simple judgment
+        const judgment = simpleWordJudgment(lowerWord, userLevel, wordRecord);
+        initialScore = judgment.score;
+      }
       
       // 如果没有记录，创建一个
       if (!wordRecord) {
@@ -120,33 +142,36 @@ router.post('/batch-check', async (req, res) => {
           INSERT INTO word_records (
             user_id, word, familiarity_score, encounter_count
           ) VALUES (?, ?, ?, 0)
-        `, [user_id, lowerWord, judgment.score]);
+        `, [user_id, lowerWord, initialScore]);
         
         wordRecord = { 
-          familiarity_score: judgment.score,
+          familiarity_score: initialScore,
           encounter_count: 0
         };
       }
 
+      // Determine if translation needed
+      const needsTranslation = wordRecord.familiarity_score < 65;
+
       // 构建响应
-      if (judgment.needs_translation) {
-        results[lowerWord] = {
-          needs_translation: true,
-          familiarity_score: wordRecord.familiarity_score
-        };
-        
-        // 如果需要包含翻译（但我们没有词典，返回提示）
-        if (include_translation) {
+      results[lowerWord] = {
+        needs_translation: needsTranslation,
+        familiarity_score: wordRecord.familiarity_score
+      };
+
+      // Include translation if requested and needed
+      if (include_translation && needsTranslation) {
+        if (dictEntry) {
           results[lowerWord].translation = {
-            translation: '(需要安装ECDICT词典)',
+            translation: dictEntry.translation,
+            phonetic: dictEntry.phonetic
+          };
+        } else {
+          results[lowerWord].translation = {
+            translation: '(未找到翻译)',
             phonetic: ''
           };
         }
-      } else {
-        results[lowerWord] = {
-          needs_translation: false,
-          familiarity_score: wordRecord.familiarity_score
-        };
       }
     }
 

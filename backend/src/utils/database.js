@@ -69,10 +69,45 @@ function dbAll(db, sql, params = []) {
 }
 
 // 导出
+// 词典数据库的Promise包装器
+function dictDbGet(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    if (!dictDb) {
+      resolve(null);
+      return;
+    }
+    dictDb.get(sql, params, (err, row) => {
+      if (err) reject(err);
+      else resolve(row);
+    });
+  });
+}
+
+function dictDbAll(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    if (!dictDb) {
+      resolve([]);
+      return;
+    }
+    dictDb.all(sql, params, (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+}
+
+// Async function to check if dictDb is ready
+async function connectDictDb() {
+  return dictDb;
+}
+
 module.exports = {
   userDb,
   dictDb,
   dbRun,
   dbGet,
-  dbAll
+  dbAll,
+  dictDbGet,
+  dictDbAll,
+  connectDictDb
 };
