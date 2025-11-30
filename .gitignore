@@ -1,0 +1,62 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js (for future backend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Build files
+dist/
+build/
+*.crx
+*.pem
+
+# Logs
+logs/
+*.log
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Chrome extension packaging
+*.zip
+
+# Database (for future backend)
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+!data/.gitkeep
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# OS generated files
+.Spotlight-V100
+.Trashes
+

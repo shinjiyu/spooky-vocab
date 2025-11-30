@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>English Vocabulary Helper - Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      line-height: 1.8;
+      background: #f5f5f5;
+    }
+    
+    .container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    h1 {
+      color: #667eea;
+      margin-bottom: 10px;
+    }
+    
+    .subtitle {
+      color: #999;
+      margin-bottom: 30px;
+    }
+    
+    h2 {
+      color: #333;
+      margin-top: 30px;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #667eea;
+      padding-bottom: 8px;
+    }
+    
+    p {
+      margin-bottom: 15px;
+      color: #444;
+    }
+    
+    .note {
+      background: #f0f2ff;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    
+    .word-list {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+    
+    .word-list h3 {
+      margin-top: 0;
+      color: #667eea;
+    }
+    
+    ul {
+      padding-left: 20px;
+    }
+    
+    li {
+      margin-bottom: 8px;
+    }
+    
+    .instructions {
+      background: #fff9e6;
+      border: 2px dashed #ffd700;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 30px 0;
+    }
+    
+    .instructions h3 {
+      margin-top: 0;
+      color: #d4a500;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Intelligent English Vocabulary Helper</h1>
+    <p class="subtitle">Test Page for Chrome Extension</p>
+
+    <div class="instructions">
+      <h3>📝 Testing Instructions</h3>
+      <p><strong>Desktop (PC):</strong></p>
+      <ul>
+        <li>Hover over highlighted words to see translations</li>
+        <li>Double-click any word to force show translation</li>
+        <li>Click the "✓" button to mark a word as known</li>
+      </ul>
+      <p><strong>Mobile (Kiwi Browser):</strong></p>
+      <ul>
+        <li>Tap highlighted words to toggle translation</li>
+        <li>Long-press (500ms) any word to force show translation</li>
+        <li>Tap outside the tooltip to hide it</li>
+      </ul>
+    </div>
+
+    <h2>Simple Text</h2>
+    <p>
+      This is a simple test with common words. The extension should not show 
+      translations for these basic words like "the", "is", "have", "make", and "take". 
+      You can see that most words here are very simple and easy to understand.
+    </p>
+
+    <h2>Intermediate Vocabulary</h2>
+    <p>
+      Modern software development requires developers to implement comprehensive 
+      solutions that are both significant and maintainable. It's essential to 
+      facilitate collaboration among team members and establish clear processes. 
+      The ability to integrate various components and demonstrate technical skills 
+      is fundamental for success.
+    </p>
+
+    <h2>Advanced Vocabulary</h2>
+    <p>
+      The ubiquitous nature of technology in contemporary society presents both 
+      ephemeral challenges and enduring opportunities. A meticulous approach to 
+      paradigm shifts requires pragmatic thinking rather than ambiguous strategies. 
+      The cognitive processes involved in coherent system design demand empirical 
+      evidence and intrinsic understanding of fundamental principles.
+    </p>
+
+    <h2>Technical Content</h2>
+    <p>
+      The implementation of sophisticated algorithms can substantially enhance 
+      performance metrics. However, one must mitigate potential anomalies and 
+      scrutinize edge cases with tangible test scenarios. The resilient 
+      architecture should be versatile enough to accommodate divergent requirements 
+      while maintaining a coherent structure that exemplifies best practices.
+    </p>
+
+    <div class="word-list">
+      <h3>Expected Behavior:</h3>
+      <ul>
+        <li><strong>Simple words</strong> (the, is, are, have, etc.): No translation shown</li>
+        <li><strong>Common words</strong> (simple, test, basic, etc.): No translation shown</li>
+        <li><strong>Intermediate words</strong> (implement, comprehensive, facilitate, etc.): Translation shown on hover/tap</li>
+        <li><strong>Advanced words</strong> (ubiquitous, ephemeral, meticulous, paradigm, etc.): Translation shown on hover/tap</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <strong>Note:</strong> This is a mock version using hardcoded vocabulary data. 
+      The actual production version will use a comprehensive dictionary with 800,000+ words 
+      and adaptive learning algorithms to personalize translations based on your level.
+    </div>
+
+    <h2>Additional Test Scenarios</h2>
+    
+    <h3>Mixed Content</h3>
+    <p>
+      The quintessential example of a viable solution demonstrates how 
+      superficial analysis can be misleading. An unprecedented approach might 
+      augment our understanding, serving as a catalyst for innovation. The 
+      eloquent presentation should highlight pertinent details while maintaining 
+      coherent narrative flow.
+    </p>
+
+    <h3>Technical Jargon</h3>
+    <p>
+      Modern web applications must be resilient and versatile, capable of handling 
+      divergent user requirements. The implementation should exemplify industry 
+      standards and maintain legitimate interfaces. Through meticulous planning and 
+      tangible milestones, teams can mitigate risks and scrutinize potential issues 
+      before they manifest.
+    </p>
+
+    <h3>Academic Style</h3>
+    <p>
+      The intrinsic properties of complex systems require empirical investigation 
+      to establish fundamental principles. Coherent theories must be substantiated 
+      through rigorous analysis, demonstrating significant contributions to the field. 
+      The pragmatic application of these principles facilitates comprehensive 
+      understanding across diverse contexts.
+    </p>
+
+    <div class="instructions">
+      <h3>🎯 Evaluation Criteria</h3>
+      <ul>
+        <li>Does the tooltip interfere with reading the original text?</li>
+        <li>Is the tooltip positioning accurate and readable?</li>
+        <li>Are the interactions smooth and intuitive?</li>
+        <li>Does it work well on both desktop and mobile?</li>
+        <li>Is the response time acceptable?</li>
+        <li>Can you easily mark words as "known"?</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>
+
