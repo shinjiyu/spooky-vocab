@@ -1,10 +1,22 @@
-// Popup UI logic
+// Popup UI logic - 整合登陆、主界面、设置
 // Popup界面逻辑
 
 (function() {
   'use strict';
 
-  // DOM元素
+  // 视图元素
+  const loginView = document.getElementById('loginView');
+  const mainView = document.getElementById('mainView');
+  const settingsView = document.getElementById('settingsView');
+
+  // 登陆视图元素
+  const loginForm = document.getElementById('loginForm');
+  const userIdInput = document.getElementById('userId');
+  const cefrLevelSelect = document.getElementById('cefrLevel');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginStatus = document.getElementById('loginStatus');
+
+  // 主视图元素
   const userInfoEl = document.getElementById('userInfo');
   const toggleSwitch = document.getElementById('toggleSwitch');
   const uniqueWordsEl = document.getElementById('uniqueWords');
@@ -12,146 +24,196 @@
   const knownWordsList = document.getElementById('knownWordsList');
   const clearHistoryBtn = document.getElementById('clearHistoryBtn');
   const levelBtns = document.querySelectorAll('.level-btn');
-  const footerEl = document.getElementById('footer');
+  const settingsBtn = document.getElementById('settingsBtn');
+
+  // 设置视图元素
+  const backBtn = document.getElementById('backBtn');
+  const apiBaseUrlInput = document.getElementById('apiBaseUrl');
+  const testConnectionBtn = document.getElementById('testConnectionBtn');
+  const connectionStatus = document.getElementById('connectionStatus');
+  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const settingsStatus = document.getElementById('settingsStatus');
+  const currentUserIdEl = document.getElementById('currentUserId');
+  const presetBtns = document.querySelectorAll('.preset-btn');
 
   // 配置
-  const API_BASE_URL = window.CONFIG ? window.CONFIG.api.baseURL : 'http://localhost:3000';
+  let API_BASE_URL = window.CONFIG ? window.CONFIG.api.baseURL : 'http://localhost:3000';
   const JWT_STORAGE_KEY = window.CONFIG ? window.CONFIG.jwt.storageKey : 'spooky_vocab_jwt';
 
   // 状态
   let currentToken = null;
   let currentUserId = null;
   let useAPI = true;
-
-  // 调试日志
-  console.log('[Popup] Initializing...');
-  console.log('[Popup] API_BASE_URL:', API_BASE_URL);
-  console.log('[Popup] CONFIG available:', !!window.CONFIG);
+  let refreshTimer = null;
 
   // 初始化
   init();
 
   async function init() {
-    console.log('[Popup] Starting initialization...');
+    console.log('[Popup] Initializing...');
+    
+    // 加载API配置
+    await loadApiConfig();
+    
+    // 检查登陆状态
+    await loadToken();
+    
+    // 根据登陆状态显示对应视图
+    if (currentToken) {
+      showView('main');
+      await loadMainView();
+      startAutoRefresh();  // 开始自动刷新
+    } else {
+      showView('login');
+      loadSavedUserId();
+    }
+    
+    // 附加事件监听
+    attachEventListeners();
+  }
+
+  // ============ 视图切换 ============
+
+  function showView(viewName) {
+    loginView.classList.remove('active');
+    mainView.classList.remove('active');
+    settingsView.classList.remove('active');
+    
+    switch(viewName) {
+      case 'login':
+        loginView.classList.add('active');
+        break;
+      case 'main':
+        mainView.classList.add('active');
+        break;
+      case 'settings':
+        settingsView.classList.add('active');
+        loadSettingsView();
+        break;
+    }
+    
+    console.log('[Popup] Switched to view:', viewName);
+  }
+
+  // ============ 登陆视图 ============
+
+  function loadSavedUserId() {
+    chrome.storage.local.get(['user_id', 'cefrLevel'], (result) => {
+      if (result.user_id) {
+        userIdInput.value = result.user_id;
+      }
+      if (result.cefrLevel) {
+        cefrLevelSelect.value = result.cefrLevel;
+      }
+    });
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    
+    const userId = userIdInput.value.trim();
+    const cefrLevel = cefrLevelSelect.value;
+    
+    if (!userId || !/^[a-zA-Z0-9_]+$/.test(userId)) {
+      showLoginStatus('error', '用户ID格式不正确');
+      return;
+    }
+    
+    showLoginStatus('loading', '正在登陆...');
+    loginBtn.disabled = true;
     
     try {
-      // 加载JWT token
-      console.log('[Popup] Loading JWT token...');
-      await loadToken();
-      console.log('[Popup] Token loaded:', currentToken ? 'Yes' : 'No');
-      console.log('[Popup] User ID:', currentUserId);
+      const response = await fetch(`${API_BASE_URL}/api/auth/test-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, cefr_level: cefrLevel })
+      });
       
-      // 检查是否使用API
-      const result = await chromeStorageGet(['use_api']);
-      useAPI = result.use_api !== false;
-      console.log('[Popup] Use API mode:', useAPI);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       
-      // 加载各种数据
+      const data = await response.json();
+      
+      if (!data.success || !data.data || !data.data.token) {
+        throw new Error('Invalid response');
+      }
+      
+      // 保存token和用户信息
+      await chromeStorageSet({
+        [JWT_STORAGE_KEY]: data.data.token,
+        user_id: userId,
+        cefrLevel: cefrLevel,
+        login_time: new Date().toISOString()
+      });
+      
+      currentToken = data.data.token;
+      currentUserId = userId;
+      
+      showLoginStatus('success', '✓ 登陆成功！');
+      
+      setTimeout(() => {
+        showView('main');
+        loadMainView();
+        startAutoRefresh();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('[Popup] Login failed:', error);
+      showLoginStatus('error', `登陆失败: ${error.message}`);
+      loginBtn.disabled = false;
+    }
+  }
+
+  function showLoginStatus(type, message) {
+    loginStatus.className = `status-message ${type}`;
+    loginStatus.textContent = message;
+    
+    if (type === 'error') {
+      setTimeout(() => {
+        loginStatus.className = 'status-message';
+      }, 3000);
+    }
+  }
+
+  // ============ 主视图 ============
+
+  async function loadMainView() {
+    console.log('[Popup] Loading main view...');
+    
+    try {
       await loadSettings();
       await loadUserInfo();
       await loadStats();
-      await loadReviewWords();
-      
-      // 附加事件监听器
-      attachEventListeners();
-      
-      // 更新footer
-      updateFooter();
-      
-      // 定期刷新数据
-      setInterval(refreshData, 5000);
-      
-      console.log('[Popup] Initialization complete!');
-      
+      await loadKnownWords();
     } catch (error) {
-      console.error('[Popup] Initialization failed:', error);
-      console.error('[Popup] Error stack:', error.stack);
-      showError('初始化失败，使用离线模式');
-      useAPI = false;
-      
-      // 降级到本地模式
-      await loadSettings();
-      loadStatsFromLocal();
-      loadKnownWordsFromLocal();
-      attachEventListeners();
-      updateFooter();
+      console.error('[Popup] Failed to load main view:', error);
     }
   }
 
-  // 加载JWT token
   async function loadToken() {
-    const result = await chromeStorageGet([JWT_STORAGE_KEY]);
+    const result = await chromeStorageGet([JWT_STORAGE_KEY, 'user_id']);
+    
     if (result[JWT_STORAGE_KEY]) {
       currentToken = result[JWT_STORAGE_KEY];
-      
-      // 解析token获取user_id
-      try {
-        const parts = currentToken.split('.');
-        if (parts.length === 3) {
-          const payloadBase64 = parts[1];
-          const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
-          const payload = JSON.parse(payloadJson);
-          currentUserId = payload.user_id;
-        }
-      } catch (error) {
-        console.error('[Popup] Failed to parse token:', error);
-      }
+      currentUserId = result.user_id;
+      console.log('[Popup] Token loaded:', !!currentToken);
     }
   }
 
-  // 加载用户信息
-  async function loadUserInfo() {
-    console.log('[Popup] Loading user info...');
-    console.log('[Popup] useAPI:', useAPI, 'currentToken:', !!currentToken);
-    
-    if (!useAPI) {
-      console.log('[Popup] API mode disabled, showing offline mode');
-      userInfoEl.textContent = '离线模式（Mock数据）';
-      userInfoEl.style.cursor = 'pointer';
-      userInfoEl.title = '点击前往设置';
-      userInfoEl.onclick = () => chrome.runtime.openOptionsPage();
-      return;
-    }
-    
-    if (!currentToken) {
-      console.log('[Popup] No token, prompting login');
-      userInfoEl.innerHTML = '未登陆 - <a href="#" style="color: #667eea; text-decoration: underline;">点击登陆</a>';
-      userInfoEl.querySelector('a').onclick = (e) => {
-        e.preventDefault();
-        chrome.tabs.create({ url: chrome.runtime.getURL('login/login.html') });
-      };
-      return;
-    }
-
-    try {
-      console.log('[Popup] Fetching user settings from API...');
-      const data = await apiRequest('GET', '/api/user/settings');
-      console.log('[Popup] User settings received:', data);
-      
-      if (data) {
-        currentUserId = currentUserId || data.user_id || '未知';
-        const cefrLevel = data.cefr_level || 'B1';
-        
-        userInfoEl.textContent = `用户: ${currentUserId} | 等级: ${cefrLevel}`;
-        console.log('[Popup] User info updated:', userInfoEl.textContent);
-        
-        // 更新等级按钮
-        levelBtns.forEach(btn => {
-          btn.classList.toggle('active', btn.dataset.level === cefrLevel);
-        });
-      }
-    } catch (error) {
-      console.error('[Popup] Failed to load user info:', error);
-      console.error('[Popup] Error details:', error.message);
-      userInfoEl.textContent = currentUserId ? `用户: ${currentUserId}` : '离线模式';
+  async function loadApiConfig() {
+    const result = await chromeStorageGet(['api_base_url']);
+    if (result.api_base_url) {
+      API_BASE_URL = result.api_base_url;
+      console.log('[Popup] API URL:', API_BASE_URL);
     }
   }
 
-  // 加载设置
   async function loadSettings() {
     const result = await chromeStorageGet(['enabled', 'cefrLevel']);
     
-    const enabled = result.enabled !== false; // 默认启用
+    const enabled = result.enabled !== false;
     toggleSwitch.classList.toggle('active', enabled);
 
     const cefrLevel = result.cefrLevel || 'B1';
@@ -160,75 +222,113 @@
     });
   }
 
-  // 加载统计数据
-  async function loadStats() {
-    if (!useAPI || !currentToken) {
-      loadStatsFromLocal();
-      return;
-    }
-
-    try {
-      const stats = await apiRequest('GET', '/api/review/stats?period=all');
-      
-      if (stats) {
-        uniqueWordsEl.textContent = stats.total_words || 0;
-        knownWordsEl.textContent = stats.known_words || 0;
-      }
-    } catch (error) {
-      console.error('[Popup] Failed to load stats:', error);
-      loadStatsFromLocal();
+  async function loadUserInfo() {
+    if (currentUserId) {
+      userInfoEl.textContent = `用户: ${currentUserId}`;
+    } else {
+      userInfoEl.textContent = '未登陆';
     }
   }
 
-  // 从本地存储加载统计数据（降级）
-  function loadStatsFromLocal() {
-    chromeStorageGet(['encounterHistory']).then(result => {
-      const history = result.encounterHistory || [];
-      
-      const uniqueWords = new Set();
-      let knownCount = 0;
-
-      history.forEach(encounter => {
-        uniqueWords.add(encounter.word);
-        if (encounter.action === 'known') {
-          knownCount++;
+  async function loadStats() {
+    console.log('[Popup] Refreshing stats...');
+    
+    try {
+      // 尝试从API获取统计数据
+      if (useAPI && currentToken) {
+        const stats = await apiRequest('GET', '/api/review/stats?period=all');
+        
+        if (stats) {
+          uniqueWordsEl.textContent = stats.total_words || 0;
+          knownWordsEl.textContent = stats.known_words || 0;
+          console.log('[Popup] Stats from API:', stats);
+          return;
         }
-      });
+      }
+    } catch (error) {
+      console.log('[Popup] API stats failed, using local');
+    }
+    
+    // 降级：从本地存储获取
+    const result = await chromeStorageGet(['encounterHistory']);
+    const history = result.encounterHistory || [];
+    
+    const uniqueWords = new Set();
+    let knownCount = 0;
 
-      uniqueWordsEl.textContent = uniqueWords.size;
-      knownWordsEl.textContent = knownCount;
+    history.forEach(encounter => {
+      uniqueWords.add(encounter.word);
+      if (encounter.action === 'known') {
+        knownCount++;
+      }
+    });
+
+    uniqueWordsEl.textContent = uniqueWords.size;
+    knownWordsEl.textContent = knownCount;
+    
+    console.log('[Popup] Stats from local:', {
+      unique: uniqueWords.size,
+      known: knownCount
     });
   }
 
-  // 加载复习单词列表
-  async function loadReviewWords() {
-    if (!useAPI || !currentToken) {
-      loadKnownWordsFromLocal();
+  async function loadKnownWords() {
+    try {
+      // 尝试从API获取
+      if (useAPI && currentToken) {
+        const data = await apiRequest('GET', '/api/review/words?limit=10&sort=recent');
+        
+        if (data && data.words && data.words.length > 0) {
+          renderWordList(data.words);
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('[Popup] API words failed, using local');
+    }
+    
+    // 降级：从本地获取
+    const result = await chromeStorageGet(['knownWords', 'encounterHistory']);
+    const knownWords = result.knownWords || [];
+    
+    if (knownWords.length === 0) {
+      knownWordsList.innerHTML = '<div class="empty-state">暂无已掌握的词汇</div>';
       return;
     }
 
-    try {
-      const data = await apiRequest('GET', '/api/review/words?limit=20&sort=recent');
-      
-      if (data && data.words && data.words.length > 0) {
-        renderWordList(data.words);
-      } else {
-        knownWordsList.innerHTML = '<div class="empty-state">暂无需要复习的词汇</div>';
+    const history = result.encounterHistory || [];
+    const wordCounts = {};
+    
+    history.forEach(encounter => {
+      if (encounter.action === 'known') {
+        wordCounts[encounter.word] = (wordCounts[encounter.word] || 0) + 1;
       }
-    } catch (error) {
-      console.error('[Popup] Failed to load review words:', error);
-      loadKnownWordsFromLocal();
+    });
+
+    let html = '';
+    knownWords.slice(0, 10).forEach(word => {
+      const count = wordCounts[word] || 1;
+      html += `
+        <div class="word-item">
+          <span class="word-text">${word}</span>
+          <span class="word-count">×${count}</span>
+        </div>
+      `;
+    });
+
+    if (knownWords.length > 10) {
+      html += `<div class="empty-state">...还有 ${knownWords.length - 10} 个单词</div>`;
     }
+
+    knownWordsList.innerHTML = html;
   }
 
-  // 渲染单词列表
   function renderWordList(words) {
     let html = '';
     
     words.forEach(wordData => {
       const word = wordData.word;
       const score = wordData.familiarity_score || 0;
-      const count = wordData.encounter_count || 0;
       
       html += `
         <div class="word-item">
@@ -241,54 +341,144 @@
     knownWordsList.innerHTML = html;
   }
 
-  // 从本地存储加载已知单词（降级）
-  function loadKnownWordsFromLocal() {
-    chromeStorageGet(['knownWords']).then(result => {
-      const knownWords = result.knownWords || [];
-      
-      if (knownWords.length === 0) {
-        knownWordsList.innerHTML = '<div class="empty-state">暂无已掌握的词汇</div>';
-        return;
+  // 自动刷新
+  function startAutoRefresh() {
+    // 清除旧的定时器
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+    }
+    
+    // 每2秒刷新一次统计数据
+    refreshTimer = setInterval(() => {
+      if (mainView.classList.contains('active')) {
+        loadStats();
+        loadKnownWords();
       }
+    }, 2000);
+    
+    console.log('[Popup] Auto-refresh started (2s interval)');
+  }
 
-      chromeStorageGet(['encounterHistory']).then(historyResult => {
-        const history = historyResult.encounterHistory || [];
-        const wordCounts = {};
-        
-        history.forEach(encounter => {
-          if (encounter.action === 'known') {
-            wordCounts[encounter.word] = (wordCounts[encounter.word] || 0) + 1;
-          }
-        });
+  function stopAutoRefresh() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+      console.log('[Popup] Auto-refresh stopped');
+    }
+  }
 
-        let html = '';
-        knownWords.slice(0, 20).forEach(word => {
-          const count = wordCounts[word] || 1;
-          html += `
-            <div class="word-item">
-              <span class="word-text">${word}</span>
-              <span class="word-count">×${count}</span>
-            </div>
-          `;
-        });
+  // ============ 设置视图 ============
 
-        if (knownWords.length > 20) {
-          html += `<div class="empty-state">...还有 ${knownWords.length - 20} 个单词</div>`;
-        }
+  function loadSettingsView() {
+    // 加载当前API URL
+    apiBaseUrlInput.value = API_BASE_URL;
+    
+    // 加载用户信息
+    currentUserIdEl.textContent = currentUserId || '未登陆';
+  }
 
-        knownWordsList.innerHTML = html;
-      });
+  async function handleSaveSettings() {
+    const apiBaseUrl = apiBaseUrlInput.value.trim();
+    
+    if (!apiBaseUrl) {
+      showSettingsStatus('error', 'API URL不能为空');
+      return;
+    }
+    
+    try {
+      new URL(apiBaseUrl);
+    } catch (error) {
+      showSettingsStatus('error', 'API URL格式不正确');
+      return;
+    }
+    
+    await chromeStorageSet({ api_base_url: apiBaseUrl });
+    
+    API_BASE_URL = apiBaseUrl;
+    if (window.CONFIG) {
+      window.CONFIG.api.baseURL = apiBaseUrl;
+    }
+    
+    showSettingsStatus('success', '✓ 设置已保存！');
+    
+    setTimeout(() => {
+      showView('main');
+    }, 1500);
+  }
+
+  async function handleTestConnection() {
+    const apiBaseUrl = apiBaseUrlInput.value.trim();
+    
+    if (!apiBaseUrl) {
+      connectionStatus.textContent = '⚠️ 请先输入API URL';
+      connectionStatus.style.color = '#f44336';
+      return;
+    }
+    
+    connectionStatus.textContent = '⏳ 正在测试...';
+    connectionStatus.style.color = '#1976d2';
+    testConnectionBtn.disabled = true;
+    
+    try {
+      const response = await fetch(`${apiBaseUrl}/health`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.status === 'ok') {
+        connectionStatus.textContent = `✓ 连接成功！`;
+        connectionStatus.style.color = '#2e7d32';
+      } else {
+        throw new Error('Invalid response');
+      }
+      
+    } catch (error) {
+      connectionStatus.textContent = `✗ 连接失败: ${error.message}`;
+      connectionStatus.style.color = '#f44336';
+    } finally {
+      testConnectionBtn.disabled = false;
+    }
+  }
+
+  function handleLogout() {
+    if (!confirm('确定要退出登陆吗？')) {
+      return;
+    }
+    
+    chrome.storage.local.remove([JWT_STORAGE_KEY, 'user_id', 'cefrLevel', 'login_time'], () => {
+      currentToken = null;
+      currentUserId = null;
+      
+      stopAutoRefresh();
+      showView('login');
     });
   }
 
-  // 附加事件监听器
+  function showSettingsStatus(type, message) {
+    settingsStatus.className = `status-message ${type}`;
+    settingsStatus.textContent = message;
+    
+    setTimeout(() => {
+      settingsStatus.className = 'status-message';
+    }, 3000);
+  }
+
+  // ============ 事件监听 ============
+
   function attachEventListeners() {
-    // 插件开关
+    // 登陆视图
+    loginForm.addEventListener('submit', handleLogin);
+    
+    // 主视图
+    settingsBtn.addEventListener('click', () => showView('settings'));
+    
     toggleSwitch.addEventListener('click', () => {
       const isEnabled = toggleSwitch.classList.toggle('active');
       
       chrome.storage.local.set({ enabled: isEnabled }, () => {
-        // 通知content script
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
           if (tabs[0]) {
             chrome.tabs.sendMessage(tabs[0].id, {
@@ -300,86 +490,56 @@
       });
     });
 
-    // 英语水平选择
     levelBtns.forEach(btn => {
       btn.addEventListener('click', async () => {
         levelBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         
         const level = btn.dataset.level;
-        
-        // 保存到本地
         await chromeStorageSet({ cefrLevel: level });
         
-        // 同步到API
         if (useAPI && currentToken) {
           try {
-            await apiRequest('PUT', '/api/user/settings', {
-              cefr_level: level
-            });
-            
-            showSuccess('英语水平已更新');
-            await loadUserInfo();
+            await apiRequest('PUT', '/api/user/settings', { cefr_level: level });
           } catch (error) {
             console.error('[Popup] Failed to update CEFR level:', error);
-            showError('更新失败，但已保存到本地');
           }
         }
       });
     });
 
-    // 清除历史记录
-    clearHistoryBtn.addEventListener('click', async () => {
-      if (!confirm('确定要清除所有历史记录吗？这将删除已掌握的词汇列表和学习统计。')) {
+    clearHistoryBtn.addEventListener('click', () => {
+      if (!confirm('确定要清除所有历史记录吗？')) {
         return;
       }
+      
+      chrome.storage.local.set({
+        knownWords: [],
+        encounterHistory: []
+      }, () => {
+        loadStats();
+        loadKnownWords();
+      });
+    });
 
-      try {
-        // 清除本地存储
-        await chromeStorageSet({
-          knownWords: [],
-          encounterHistory: [],
-          syncQueue: []
-        });
-        
-        // TODO: 调用API清除后端数据（如果后端提供了该接口）
-        
-        // 刷新显示
-        await loadStats();
-        await loadReviewWords();
-        
-        showSuccess('历史记录已清除');
-      } catch (error) {
-        console.error('[Popup] Failed to clear history:', error);
-        showError('清除失败');
-      }
+    // 设置视图
+    backBtn.addEventListener('click', () => showView('main'));
+    saveSettingsBtn.addEventListener('click', handleSaveSettings);
+    testConnectionBtn.addEventListener('click', handleTestConnection);
+    logoutBtn.addEventListener('click', handleLogout);
+    
+    presetBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        apiBaseUrlInput.value = btn.dataset.url;
+      });
     });
   }
 
-  // 刷新数据
-  async function refreshData() {
-    try {
-      if (useAPI && currentToken) {
-        await loadStats();
-      } else {
-        loadStatsFromLocal();
-      }
-    } catch (error) {
-      // 静默失败
-    }
-  }
+  // ============ 辅助函数 ============
 
-  // 更新footer
-  function updateFooter() {
-    const mode = useAPI ? 'API模式' : '离线模式';
-    const status = currentToken ? '已连接' : '未连接';
-    footerEl.innerHTML = `Spooky Vocab v1.0.0<br>${mode} | ${status}`;
-  }
-
-  // API请求封装
   async function apiRequest(method, endpoint, data = null) {
     if (!currentToken) {
-      throw new Error('No JWT token available');
+      throw new Error('No token');
     }
 
     const url = `${API_BASE_URL}${endpoint}`;
@@ -398,14 +558,13 @@
     const response = await fetch(url, config);
     
     if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+      throw new Error(`HTTP ${response.status}`);
     }
 
     const result = await response.json();
     return result.data || result;
   }
 
-  // Chrome存储辅助函数
   function chromeStorageGet(keys) {
     return new Promise((resolve) => {
       chrome.storage.local.get(keys, resolve);
@@ -418,27 +577,8 @@
     });
   }
 
-  // UI反馈
-  function showSuccess(message) {
-    // 简单的临时提示
-    const oldText = userInfoEl.textContent;
-    userInfoEl.textContent = `✓ ${message}`;
-    userInfoEl.style.color = '#4caf50';
-    
-    setTimeout(() => {
-      loadUserInfo();
-      userInfoEl.style.color = '';
-    }, 2000);
-  }
-
-  function showError(message) {
-    const oldText = userInfoEl.textContent;
-    userInfoEl.textContent = `✗ ${message}`;
-    userInfoEl.style.color = '#f44336';
-    
-    setTimeout(() => {
-      userInfoEl.textContent = oldText;
-      userInfoEl.style.color = '';
-    }, 3000);
-  }
+  // 清理
+  window.addEventListener('unload', () => {
+    stopAutoRefresh();
+  });
 })();
