@@ -6,22 +6,32 @@ const { dictDbGet, dictDbAll, connectDictDb } = require('../utils/database');
 class DictionaryService {
   constructor() {
     this.ready = false;
-    this.init();
+    this.initPromise = null;
+    // 延迟初始化，给数据库连接时间
+    setTimeout(() => this.init(), 100);
   }
 
   async init() {
-    try {
-      const db = await connectDictDb();
-      this.ready = !!db;
-      if (this.ready) {
-        console.log('✓ Dictionary service ready (ECDICT loaded)');
-      } else {
-        console.log('⚠ Dictionary service unavailable - ECDICT not loaded');
-      }
-    } catch (error) {
-      console.error('Dictionary service initialization failed:', error);
-      this.ready = false;
+    if (this.initPromise) {
+      return this.initPromise;
     }
+
+    this.initPromise = (async () => {
+      try {
+        const db = await connectDictDb();
+        this.ready = !!db;
+        if (this.ready) {
+          console.log('✓ Dictionary service ready (ECDICT loaded)');
+        } else {
+          console.log('⚠ Dictionary service unavailable - ECDICT not loaded');
+        }
+      } catch (error) {
+        console.error('Dictionary service initialization failed:', error);
+        this.ready = false;
+      }
+    })();
+
+    return this.initPromise;
   }
 
   /**
@@ -30,6 +40,11 @@ class DictionaryService {
    * @returns {Object|null} Dictionary entry or null if not found
    */
   async lookup(word) {
+    // Ensure initialization is complete
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    
     if (!this.ready) {
       return null;
     }
@@ -81,6 +96,11 @@ class DictionaryService {
    * @returns {Object} Map of word -> dictionary entry
    */
   async batchLookup(words) {
+    // Ensure initialization is complete
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    
     if (!this.ready || !words || words.length === 0) {
       return {};
     }
@@ -150,6 +170,11 @@ class DictionaryService {
    * @returns {Object} Difficulty assessment
    */
   async getDifficulty(word) {
+    // Ensure initialization is complete
+    if (this.initPromise) {
+      await this.initPromise;
+    }
+    
     const entry = await this.lookup(word);
     
     if (!entry) {
