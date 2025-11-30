@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spooky Vocab - 设置</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 32px;
+      border-radius: 16px 16px 0 0;
+      margin-bottom: 0;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 16px;
+      opacity: 0.9;
+    }
+
+    .content {
+      background: white;
+      padding: 32px;
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .section {
+      margin-bottom: 32px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 4px;
+      height: 24px;
+      background: #667eea;
+      border-radius: 2px;
+      margin-right: 12px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group .hint {
+      font-size: 12px;
+      color: #999;
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    .form-group .current-value {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #e3f2fd;
+      color: #1976d2;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-top: 6px;
+      font-family: 'Courier New', monospace;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin-right: 12px;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+      margin-bottom: 0;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #667eea;
+      color: white;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+
+    .btn-secondary:hover {
+      background: #f0f2ff;
+    }
+
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #d32f2f;
+    }
+
+    .status {
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      display: block;
+    }
+
+    .status.error {
+      background: #ffebee;
+      color: #c62828;
+      display: block;
+    }
+
+    .info-box {
+      background: #e3f2fd;
+      border-left: 4px solid #1976d2;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .info-box p {
+      font-size: 14px;
+      color: #1976d2;
+      line-height: 1.6;
+    }
+
+    .preset-urls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .preset-btn {
+      padding: 6px 12px;
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-btn:hover {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 32px;
+      padding: 20px;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>⚙️ 设置</h1>
+      <p>配置 Spooky Vocab 的运行参数</p>
+    </div>
+
+    <div class="content">
+      <div id="statusMessage" class="status"></div>
+
+      <!-- API服务器设置 -->
+      <div class="section">
+        <div class="section-title">API服务器</div>
+        
+        <div class="info-box">
+          <p>
+            <strong>提示：</strong> 修改API地址后需要重新登陆。
+            本地开发使用 <code>http://localhost:3000</code>，
+            生产环境需要配置实际的服务器地址。
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="apiBaseUrl">API Base URL</label>
+          <input 
+            type="url" 
+            id="apiBaseUrl" 
+            placeholder="http://localhost:3000"
+          >
+          <div class="hint">
+            后端API服务器的完整地址（包含 http:// 或 https://）
+          </div>
+          
+          <div class="preset-urls">
+            <span style="font-size: 12px; color: #666; margin-right: 8px;">快速选择：</span>
+            <button class="preset-btn" data-url="http://localhost:3000">本地开发</button>
+            <button class="preset-btn" data-url="http://localhost:5000">本地:5000</button>
+            <button class="preset-btn" data-url="https://api.spookyvocab.com">生产环境</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <button class="btn btn-secondary" id="testConnectionBtn">🔍 测试连接</button>
+          <div class="hint" id="connectionStatus"></div>
+        </div>
+      </div>
+
+      <!-- 调试选项 -->
+      <div class="section">
+        <div class="section-title">调试选项</div>
+        
+        <div class="checkbox-group">
+          <input type="checkbox" id="debugMode">
+          <label for="debugMode">启用调试模式（在控制台显示详细日志）</label>
+        </div>
+
+        <div class="checkbox-group">
+          <input type="checkbox" id="useApiMode" checked>
+          <label for="useApiMode">使用API模式（取消勾选将使用离线Mock数据）</label>
+        </div>
+      </div>
+
+      <!-- 账号信息 -->
+      <div class="section">
+        <div class="section-title">账号信息</div>
+        
+        <div class="form-group">
+          <label>当前用户ID</label>
+          <div class="current-value" id="currentUserId">未登陆</div>
+        </div>
+
+        <div class="form-group">
+          <label>英语水平</label>
+          <div class="current-value" id="currentCefrLevel">-</div>
+        </div>
+
+        <div class="form-group">
+          <label>登陆时间</label>
+          <div class="current-value" id="loginTime">-</div>
+        </div>
+
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="logoutBtn">🚪 退出登陆</button>
+          <button class="btn btn-danger" id="clearDataBtn">🗑️ 清除所有数据</button>
+        </div>
+      </div>
+
+      <!-- 保存按钮 -->
+      <div class="btn-group">
+        <button class="btn btn-primary" id="saveBtn">💾 保存设置</button>
+        <button class="btn btn-secondary" id="resetBtn">↻ 恢复默认</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      Spooky Vocab v1.0.0 · 
+      <a href="../login/login.html" style="color: #667eea; text-decoration: none;">返回登陆</a>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
+

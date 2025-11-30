@@ -104,9 +104,22 @@
     console.log('[Popup] Loading user info...');
     console.log('[Popup] useAPI:', useAPI, 'currentToken:', !!currentToken);
     
-    if (!useAPI || !currentToken) {
-      console.log('[Popup] No API or no token, showing offline mode');
-      userInfoEl.textContent = '离线模式';
+    if (!useAPI) {
+      console.log('[Popup] API mode disabled, showing offline mode');
+      userInfoEl.textContent = '离线模式（Mock数据）';
+      userInfoEl.style.cursor = 'pointer';
+      userInfoEl.title = '点击前往设置';
+      userInfoEl.onclick = () => chrome.runtime.openOptionsPage();
+      return;
+    }
+    
+    if (!currentToken) {
+      console.log('[Popup] No token, prompting login');
+      userInfoEl.innerHTML = '未登陆 - <a href="#" style="color: #667eea; text-decoration: underline;">点击登陆</a>';
+      userInfoEl.querySelector('a').onclick = (e) => {
+        e.preventDefault();
+        chrome.tabs.create({ url: chrome.runtime.getURL('login/login.html') });
+      };
       return;
     }
 

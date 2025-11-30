@@ -2,10 +2,9 @@
 // 配置管理
 
 const CONFIG = {
-  // API服务器配置
+  // API服务器配置（默认值，可在Settings中修改）
   api: {
-    baseURL: 'http://localhost:3000',  // 开发环境
-    // baseURL: 'https://api.spookyvocab.com',  // 生产环境（未来）
+    baseURL: 'http://localhost:3000',  // 默认本地开发环境
     timeout: 10000,  // 10秒超时
     retryAttempts: 3,
     retryDelay: 1000  // 重试延迟(ms)
@@ -33,22 +32,28 @@ const CONFIG = {
   }
 };
 
-// 环境检测
-function getEnvironment() {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'development';
-    }
+// 从chrome.storage加载用户配置的API URL
+async function loadUserConfig() {
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['api_base_url', 'debug_mode'], (result) => {
+        if (result.api_base_url) {
+          CONFIG.api.baseURL = result.api_base_url;
+        }
+        if (result.debug_mode !== undefined) {
+          CONFIG.features.debugMode = result.debug_mode;
+        }
+        resolve();
+      });
+    });
   }
-  return 'production';
 }
 
-// 根据环境调整配置
-const env = getEnvironment();
-if (env === 'production') {
-  CONFIG.api.baseURL = 'https://api.spookyvocab.com';
-  CONFIG.features.debugMode = false;
+// 如果在扩展环境中，尝试加载用户配置
+if (typeof chrome !== 'undefined' && chrome.storage) {
+  loadUserConfig().then(() => {
+    console.log('[Config] Loaded with API URL:', CONFIG.api.baseURL);
+  });
 }
 
 // 导出配置
