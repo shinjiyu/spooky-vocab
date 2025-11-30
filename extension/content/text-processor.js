@@ -112,50 +112,44 @@
       try {
         if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
           // 使用真实API
-          const result = await window.apiClient.batchCheckWords(uncachedWords);
+          this.log('🌐 Calling API batch-check for', uncachedWords.length, 'words...');
+          
+          const apiResult = await window.apiClient.batchCheckWords(uncachedWords);
+          
+          this.log('✓ API response received:', Object.keys(apiResult).length, 'words');
           
           // 缓存结果
-          Object.entries(result).forEach(([word, data]) => {
+          Object.entries(apiResult).forEach(([word, data]) => {
             this.vocabularyCache.set(word, {
               needs_translation: data.needs_translation,
               translation: data.translation || null,
+              familiarity_score: data.familiarity_score,
               timestamp: Date.now()
             });
           });
           
-        } else {
-          // 使用Mock数据
-          if (window.mockVocabulary) {
-            uncachedWords.forEach(word => {
-              const needsTranslation = window.mockVocabulary.needsTranslation(word);
-              const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
-              
-              this.vocabularyCache.set(word, {
-                needs_translation: needsTranslation,
-                translation: translation,
-                timestamp: Date.now()
-              });
-            });
-          }
+          this.log(`✓ Cached ${Object.keys(apiResult).length} words from API`);
+          return; // API成功，直接返回
         }
-        
       } catch (error) {
-        console.error('[TextProcessor] Failed to check words:', error);
-        
-        // API失败，降级到Mock模式
-        if (window.VOCAB_HELPER_CONFIG.useAPI && window.mockVocabulary) {
-          this.log('API failed, falling back to mock mode');
-          uncachedWords.forEach(word => {
-            const needsTranslation = window.mockVocabulary.needsTranslation(word);
-            const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
-            
-            this.vocabularyCache.set(word, {
-              needs_translation: needsTranslation,
-              translation: translation,
-              timestamp: Date.now()
-            });
+        console.error('[TextProcessor] ✗ API check failed:', error);
+        this.log('⚠ API failed, falling back to mock mode');
+      }
+      
+      // 使用Mock数据（降级或默认模式）
+      if (window.mockVocabulary) {
+        this.log('📦 Using mock vocabulary data for', uncachedWords.length, 'words');
+        uncachedWords.forEach(word => {
+          const needsTranslation = window.mockVocabulary.needsTranslation(word);
+          const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
+          
+          this.vocabularyCache.set(word, {
+            needs_translation: needsTranslation,
+            translation: translation,
+            timestamp: Date.now()
           });
-        }
+        });
+        this.log(`✓ Cached ${uncachedWords.length} words from mock data`);
       }
     }
 
