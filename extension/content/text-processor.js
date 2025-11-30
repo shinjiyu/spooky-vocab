@@ -95,7 +95,7 @@
       return words;
     }
 
-    // 批量检查单词（调用API或使用Mock）
+    // 批量检查单词（纯API模式）
     async batchCheckWords(words) {
       if (words.length === 0) return;
 
@@ -103,53 +103,46 @@
       const uncachedWords = words.filter(w => !this.vocabularyCache.has(w));
       
       if (uncachedWords.length === 0) {
-        this.log('All words found in cache');
+        this.log('✓ All words found in cache');
         return;
       }
 
-      this.log(`Checking ${uncachedWords.length} words via ${window.VOCAB_HELPER_CONFIG.useAPI ? 'API' : 'Mock'}`);
+      // 检查API是否就绪
+      if (!window.VOCAB_HELPER_CONFIG.API_READY) {
+        this.log('⚠ API not ready. Please login first.');
+        console.warn('[VocabHelper] API not ready. Words cannot be checked. Please login.');
+        return;
+      }
+
+      this.log(`🌐 Checking ${uncachedWords.length} words via API...`);
 
       try {
-        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
-          // 使用真实API
-          this.log('🌐 Calling API batch-check for', uncachedWords.length, 'words...');
-          
-          const apiResult = await window.apiClient.batchCheckWords(uncachedWords);
-          
-          this.log('✓ API response received:', Object.keys(apiResult).length, 'words');
-          
-          // 缓存结果
-          Object.entries(apiResult).forEach(([word, data]) => {
-            this.vocabularyCache.set(word, {
-              needs_translation: data.needs_translation,
-              translation: data.translation || null,
-              familiarity_score: data.familiarity_score,
-              timestamp: Date.now()
-            });
-          });
-          
-          this.log(`✓ Cached ${Object.keys(apiResult).length} words from API`);
-          return; // API成功，直接返回
-        }
-      } catch (error) {
-        console.error('[TextProcessor] ✗ API check failed:', error);
-        this.log('⚠ API failed, falling back to mock mode');
-      }
-      
-      // 使用Mock数据（降级或默认模式）
-      if (window.mockVocabulary) {
-        this.log('📦 Using mock vocabulary data for', uncachedWords.length, 'words');
-        uncachedWords.forEach(word => {
-          const needsTranslation = window.mockVocabulary.needsTranslation(word);
-          const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
-          
+        const apiResult = await window.apiClient.batchCheckWords(uncachedWords);
+        
+        this.log('✓ API response received:', Object.keys(apiResult).length, 'words');
+        
+        // 缓存结果
+        Object.entries(apiResult).forEach(([word, data]) => {
           this.vocabularyCache.set(word, {
-            needs_translation: needsTranslation,
-            translation: translation,
+            needs_translation: data.needs_translation,
+            translation: data.translation || null,
+            familiarity_score: data.familiarity_score,
             timestamp: Date.now()
           });
         });
-        this.log(`✓ Cached ${uncachedWords.length} words from mock data`);
+        
+        this.log(`✓ Cached ${Object.keys(apiResult).length} words from API`);
+        
+      } catch (error) {
+        console.error('[TextProcessor] ✗ API request failed:', error);
+        this.log('⚠ Failed to check words. Please check network connection and backend server.');
+        
+        // 显示用户友好的错误提示
+        if (error.message.includes('NO_AUTH_TOKEN')) {
+          console.warn('[VocabHelper] Not logged in. Please login to use the extension.');
+        } else if (error.message.includes('Network')) {
+          console.warn('[VocabHelper] Network error. Please check backend server is running.');
+        }
       }
     }
 

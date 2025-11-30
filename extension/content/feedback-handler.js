@@ -23,27 +23,21 @@
       this.knownCount++;
       this.logEncounter(lowerWord, 'known');
       
-      // 调用API
+      // 调用API（纯API模式）
       try {
-        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
+        if (window.VOCAB_HELPER_CONFIG.API_READY) {
           await window.apiClient.markWordKnown(lowerWord);
-          this.log(`API: Marked as known: ${lowerWord}`);
+          this.log(`✓ API: Marked as known: ${lowerWord}`);
+          this.notifyPopupRefresh(); // 通知Popup刷新
         } else {
-          // 使用Mock模式
-          if (window.mockVocabulary) {
-            window.mockVocabulary.markAsKnown(lowerWord);
-          }
+          this.log(`⚠ API not ready, queuing feedback: ${lowerWord}`);
+          this.queueSync('known', lowerWord, context);
         }
       } catch (error) {
-        console.error(`[FeedbackHandler] Failed to mark as known: ${lowerWord}`, error);
+        console.error(`[FeedbackHandler] ✗ Failed to mark as known: ${lowerWord}`, error);
         
-        // API失败，加入同步队列
+        // API失败，加入同步队列稍后重试
         this.queueSync('known', lowerWord, context);
-        
-        // 降级到Mock
-        if (window.mockVocabulary) {
-          window.mockVocabulary.markAsKnown(lowerWord);
-        }
       }
     }
 
@@ -57,27 +51,21 @@
       this.unknownCount++;
       this.logEncounter(lowerWord, 'unknown');
       
-      // 调用API
+      // 调用API（纯API模式）
       try {
-        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
+        if (window.VOCAB_HELPER_CONFIG.API_READY) {
           await window.apiClient.markWordUnknown(lowerWord, context);
-          this.log(`API: Marked as unknown: ${lowerWord}`);
+          this.log(`✓ API: Marked as unknown: ${lowerWord}`);
+          this.notifyPopupRefresh(); // 通知Popup刷新
         } else {
-          // 使用Mock模式
-          if (window.mockVocabulary) {
-            window.mockVocabulary.markAsUnknown(lowerWord);
-          }
+          this.log(`⚠ API not ready, queuing feedback: ${lowerWord}`);
+          this.queueSync('unknown', lowerWord, context);
         }
       } catch (error) {
-        console.error(`[FeedbackHandler] Failed to mark as unknown: ${lowerWord}`, error);
+        console.error(`[FeedbackHandler] ✗ Failed to mark as unknown: ${lowerWord}`, error);
         
-        // API失败，加入同步队列
+        // API失败，加入同步队列稍后重试
         this.queueSync('unknown', lowerWord, context);
-        
-        // 降级到Mock
-        if (window.mockVocabulary) {
-          window.mockVocabulary.markAsUnknown(lowerWord);
-        }
       }
     }
 
@@ -122,8 +110,8 @@
         return;
       }
       
-      if (!window.VOCAB_HELPER_CONFIG.apiReady || !navigator.onLine) {
-        this.log('API not ready or offline, skipping sync');
+      if (!window.VOCAB_HELPER_CONFIG.API_READY || !navigator.onLine) {
+        this.log('⚠ API not ready or offline, skipping sync');
         return;
       }
       

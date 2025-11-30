@@ -19,7 +19,6 @@
         "config.js",
         "content/jwt-manager.js",
         "content/api-client.js",
-        "content/mock-vocabulary.js",
         "content/feedback-handler.js",
         "content/translation-tooltip.js",
         "content/text-processor.js",
