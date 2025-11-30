@@ -23,17 +23,28 @@
   let currentUserId = null;
   let useAPI = true;
 
+  // 调试日志
+  console.log('[Popup] Initializing...');
+  console.log('[Popup] API_BASE_URL:', API_BASE_URL);
+  console.log('[Popup] CONFIG available:', !!window.CONFIG);
+
   // 初始化
   init();
 
   async function init() {
+    console.log('[Popup] Starting initialization...');
+    
     try {
       // 加载JWT token
+      console.log('[Popup] Loading JWT token...');
       await loadToken();
+      console.log('[Popup] Token loaded:', currentToken ? 'Yes' : 'No');
+      console.log('[Popup] User ID:', currentUserId);
       
       // 检查是否使用API
       const result = await chromeStorageGet(['use_api']);
       useAPI = result.use_api !== false;
+      console.log('[Popup] Use API mode:', useAPI);
       
       // 加载各种数据
       await loadSettings();
@@ -50,8 +61,11 @@
       // 定期刷新数据
       setInterval(refreshData, 5000);
       
+      console.log('[Popup] Initialization complete!');
+      
     } catch (error) {
       console.error('[Popup] Initialization failed:', error);
+      console.error('[Popup] Error stack:', error.stack);
       showError('初始化失败，使用离线模式');
       useAPI = false;
       
@@ -59,6 +73,8 @@
       await loadSettings();
       loadStatsFromLocal();
       loadKnownWordsFromLocal();
+      attachEventListeners();
+      updateFooter();
     }
   }
 
@@ -85,19 +101,26 @@
 
   // 加载用户信息
   async function loadUserInfo() {
+    console.log('[Popup] Loading user info...');
+    console.log('[Popup] useAPI:', useAPI, 'currentToken:', !!currentToken);
+    
     if (!useAPI || !currentToken) {
+      console.log('[Popup] No API or no token, showing offline mode');
       userInfoEl.textContent = '离线模式';
       return;
     }
 
     try {
+      console.log('[Popup] Fetching user settings from API...');
       const data = await apiRequest('GET', '/api/user/settings');
+      console.log('[Popup] User settings received:', data);
       
       if (data) {
         currentUserId = currentUserId || data.user_id || '未知';
         const cefrLevel = data.cefr_level || 'B1';
         
         userInfoEl.textContent = `用户: ${currentUserId} | 等级: ${cefrLevel}`;
+        console.log('[Popup] User info updated:', userInfoEl.textContent);
         
         // 更新等级按钮
         levelBtns.forEach(btn => {
@@ -106,6 +129,7 @@
       }
     } catch (error) {
       console.error('[Popup] Failed to load user info:', error);
+      console.error('[Popup] Error details:', error.message);
       userInfoEl.textContent = currentUserId ? `用户: ${currentUserId}` : '离线模式';
     }
   }

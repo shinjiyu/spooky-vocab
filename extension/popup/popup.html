@@ -321,6 +321,12 @@
   </div>
 
   <script src="../config.js"></script>
+  <script>
+    // 确保config加载完成
+    if (!window.CONFIG) {
+      console.error('Config not loaded!');
+    }
+  </script>
   <script src="popup.js"></script>
 </body>
 </html>
