@@ -1,0 +1,15 @@
+# Data directory for SQLite databases
+
+This directory contains:
+- `user_data.db` - User vocabulary records (auto-created)
+- `ecdict.db` - ECDICT dictionary (needs to be downloaded separately)
+
+## Download ECDICT
+
+Download the ECDICT SQLite database from:
+https://github.com/skywind3000/ECDICT/releases
+
+Extract and rename to `ecdict.db`, then place it in this directory.
+
+Without the dictionary, the API will work but won't provide translations.
+
