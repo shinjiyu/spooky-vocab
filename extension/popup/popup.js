@@ -233,26 +233,12 @@
   async function loadStats() {
     console.log('[Popup] Refreshing stats...');
     
-    try {
-      // 尝试从API获取统计数据
-      if (useAPI && currentToken) {
-        const stats = await apiRequest('GET', '/api/review/stats?period=all');
-        
-        if (stats) {
-          uniqueWordsEl.textContent = stats.total_words || 0;
-          knownWordsEl.textContent = stats.known_words || 0;
-          console.log('[Popup] Stats from API:', stats);
-          return;
-        }
-      }
-    } catch (error) {
-      console.log('[Popup] API stats failed, using local');
-    }
-    
-    // 降级：从本地存储获取
+    // "本次会话统计"始终从本地存储读取（不从API读取）
+    // 因为API返回的是全部历史数据，不是本次会话的数据
     const result = await chromeStorageGet(['encounterHistory']);
     const history = result.encounterHistory || [];
     
+    // 计算本次会话的唯一单词数
     const uniqueWords = new Set();
     let knownCount = 0;
 
@@ -263,12 +249,14 @@
       }
     });
 
+    // 更新显示
     uniqueWordsEl.textContent = uniqueWords.size;
     knownWordsEl.textContent = knownCount;
     
-    console.log('[Popup] Stats from local:', {
+    console.log('[Popup] Stats refreshed:', {
       unique: uniqueWords.size,
-      known: knownCount
+      known: knownCount,
+      total_encounters: history.length
     });
   }
 
@@ -348,15 +336,26 @@
       clearInterval(refreshTimer);
     }
     
-    // 每2秒刷新一次统计数据
+    // 每1秒刷新一次统计数据（更实时）
     refreshTimer = setInterval(() => {
       if (mainView.classList.contains('active')) {
         loadStats();
         loadKnownWords();
       }
-    }, 2000);
+    }, 1000);
     
-    console.log('[Popup] Auto-refresh started (2s interval)');
+    console.log('[Popup] Auto-refresh started (1s interval)');
+    
+    // 监听storage变化，立即刷新（最实时！）
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes.encounterHistory) {
+        console.log('[Popup] Storage changed, refreshing immediately!');
+        if (mainView.classList.contains('active')) {
+          loadStats();
+          loadKnownWords();
+        }
+      }
+    });
   }
 
   function stopAutoRefresh() {
