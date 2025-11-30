@@ -32,11 +32,13 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+const authRoutes = require('./routes/auth');
 const vocabularyRoutes = require('./routes/vocabulary');
 const feedbackRoutes = require('./routes/feedback');
 const reviewRoutes = require('./routes/review');
 const userRoutes = require('./routes/user');
 
+app.use('/api/auth', authRoutes);
 app.use('/api/vocabulary', vocabularyRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/review', reviewRoutes);
@@ -71,6 +73,8 @@ app.listen(PORT, () => {
 ║                                           ║
 ║   Endpoints:                              ║
 ║   - GET  /health                          ║
+║   - POST /api/auth/test-token             ║
+║   - POST /api/auth/refresh                ║
 ║   - POST /api/vocabulary/batch-check      ║
 ║   - POST /api/feedback/known              ║
 ║   - POST /api/feedback/unknown            ║

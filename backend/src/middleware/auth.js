@@ -1,40 +1,95 @@
 // Authentication middleware
-// Test phase: Extract plaintext user_id from Bearer token
-// Future: Implement proper JWT verification
+// JWT-based authentication
+
+const jwt = require('jsonwebtoken');
+
+// JWT密钥 - 生产环境应该从环境变量读取
+const JWT_SECRET = process.env.JWT_SECRET || 'spooky-vocab-secret-key-change-in-production';
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
+  // 检查Authorization header
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ 
-      error: 'Unauthorized',
-      message: 'Missing or invalid Authorization header. Expected: Bearer {user_id}'
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Missing or invalid Authorization header. Expected: Bearer {jwt_token}'
+      }
     });
   }
 
-  // Extract user_id from "Bearer {user_id}"
-  const user_id = authHeader.substring(7).trim();
+  // 提取JWT token
+  const token = authHeader.substring(7).trim();
 
-  if (!user_id) {
+  if (!token) {
     return res.status(401).json({ 
-      error: 'Unauthorized',
-      message: 'Empty user_id in Authorization header'
+      error: {
+        code: 'UNAUTHORIZED',
+        message: 'Empty token in Authorization header'
+      }
     });
   }
 
-  // Validate user_id format (alphanumeric and underscores only)
-  if (!/^[a-zA-Z0-9_]+$/.test(user_id)) {
-    return res.status(400).json({ 
-      error: 'Bad Request',
-      message: 'Invalid user_id format. Use alphanumeric characters and underscores only.'
-    });
+  try {
+    // 验证JWT token
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // 检查必需字段
+    if (!decoded.user_id) {
+      return res.status(401).json({ 
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Token payload missing user_id'
+        }
+      });
+    }
+
+    // 检查token是否过期
+    const now = Math.floor(Date.now() / 1000);
+    if (decoded.exp && decoded.exp < now) {
+      return res.status(401).json({ 
+        error: {
+          code: 'TOKEN_EXPIRED',
+          message: 'Token has expired'
+        }
+      });
+    }
+
+    // 将user_id和完整payload附加到request对象
+    req.user_id = decoded.user_id;
+    req.user = decoded;
+
+    next();
+
+  } catch (error) {
+    // JWT验证失败
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        error: {
+          code: 'TOKEN_EXPIRED',
+          message: 'Token has expired'
+        }
+      });
+    } else if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({ 
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid token signature or format'
+        }
+      });
+    } else {
+      return res.status(500).json({ 
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: 'Error verifying token'
+        }
+      });
+    }
   }
-
-  // Store user_id in request object
-  req.user_id = user_id;
-
-  next();
 }
 
+// 导出中间件和JWT_SECRET（用于生成token）
 module.exports = authMiddleware;
+module.exports.JWT_SECRET = JWT_SECRET;
 

@@ -11,6 +11,10 @@
       this.wordCount = 0;
       this.maxWords = isMobile ? 1000 : 3000; // 移动端限制处理数量
       
+      // 词汇判断缓存 {word: {needs_translation: bool, translation: {...}}}
+      this.vocabularyCache = new Map();
+      this.cacheExpiry = window.CONFIG ? window.CONFIG.performance.cacheExpiry : 3600000; // 1小时
+      
       // 不需要处理的标签
       this.excludedTags = new Set([
         'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
@@ -19,10 +23,14 @@
 
       // 单词匹配正则（包括连字符和缩写）
       this.wordRegex = /\b[A-Za-z]+(?:[-'][A-Za-z]+)*\b/g;
+      
+      // 待处理的单词批次
+      this.pendingBatch = new Set();
+      this.batchTimer = null;
     }
 
     // 处理整个页面
-    processPage() {
+    async processPage() {
       if (!window.VOCAB_HELPER_CONFIG.enabled) {
         return;
       }
@@ -40,6 +48,7 @@
       );
 
       const nodesToProcess = [];
+      const allWords = new Set();
       let node;
       
       while ((node = walker.nextNode())) {
@@ -47,13 +56,107 @@
           this.log(`Reached max word limit: ${this.maxWords}`);
           break;
         }
-        nodesToProcess.push(node);
+        
+        // 收集节点和单词
+        const words = this.extractWords(node.textContent);
+        if (words.length > 0) {
+          nodesToProcess.push({ node, words });
+          words.forEach(w => allWords.add(w.word.toLowerCase()));
+        }
       }
 
-      // 批量处理文本节点
-      nodesToProcess.forEach(node => this.processTextNode(node));
+      // 批量查询单词
+      if (allWords.size > 0) {
+        await this.batchCheckWords(Array.from(allWords));
+      }
+
+      // 处理文本节点
+      nodesToProcess.forEach(({ node, words }) => {
+        this.processTextNodeWithCache(node, words);
+      });
 
       this.log(`Processed ${this.wordCount} words`);
+    }
+
+    // 提取文本中的所有单词
+    extractWords(text) {
+      const words = [];
+      let match;
+      this.wordRegex.lastIndex = 0; // 重置正则状态
+      
+      while ((match = this.wordRegex.exec(text)) !== null) {
+        words.push({
+          word: match[0],
+          index: match.index,
+          length: match[0].length
+        });
+      }
+      
+      return words;
+    }
+
+    // 批量检查单词（调用API或使用Mock）
+    async batchCheckWords(words) {
+      if (words.length === 0) return;
+
+      // 过滤掉已缓存的单词
+      const uncachedWords = words.filter(w => !this.vocabularyCache.has(w));
+      
+      if (uncachedWords.length === 0) {
+        this.log('All words found in cache');
+        return;
+      }
+
+      this.log(`Checking ${uncachedWords.length} words via ${window.VOCAB_HELPER_CONFIG.useAPI ? 'API' : 'Mock'}`);
+
+      try {
+        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
+          // 使用真实API
+          const result = await window.apiClient.batchCheckWords(uncachedWords);
+          
+          // 缓存结果
+          Object.entries(result).forEach(([word, data]) => {
+            this.vocabularyCache.set(word, {
+              needs_translation: data.needs_translation,
+              translation: data.translation || null,
+              timestamp: Date.now()
+            });
+          });
+          
+        } else {
+          // 使用Mock数据
+          if (window.mockVocabulary) {
+            uncachedWords.forEach(word => {
+              const needsTranslation = window.mockVocabulary.needsTranslation(word);
+              const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
+              
+              this.vocabularyCache.set(word, {
+                needs_translation: needsTranslation,
+                translation: translation,
+                timestamp: Date.now()
+              });
+            });
+          }
+        }
+        
+      } catch (error) {
+        console.error('[TextProcessor] Failed to check words:', error);
+        
+        // API失败，降级到Mock模式
+        if (window.VOCAB_HELPER_CONFIG.useAPI && window.mockVocabulary) {
+          this.log('API failed, falling back to mock mode');
+          uncachedWords.forEach(word => {
+            const needsTranslation = window.mockVocabulary.needsTranslation(word);
+            const translation = needsTranslation ? window.mockVocabulary.getTranslation(word) : null;
+            
+            this.vocabularyCache.set(word, {
+              needs_translation: needsTranslation,
+              translation: translation,
+              timestamp: Date.now()
+            });
+          });
+        }
+      }
     }
 
     // 判断节点是否应该被处理
@@ -87,30 +190,13 @@
       return NodeFilter.FILTER_ACCEPT;
     }
 
-    // 处理单个文本节点
-    processTextNode(textNode) {
+    // 使用缓存数据处理文本节点
+    processTextNodeWithCache(textNode, words) {
       if (!textNode.parentElement) {
         return;
       }
 
       const text = textNode.textContent;
-      const words = [];
-      let match;
-      
-      // 提取所有单词及其位置
-      while ((match = this.wordRegex.exec(text)) !== null) {
-        words.push({
-          word: match[0],
-          index: match.index,
-          length: match[0].length
-        });
-      }
-
-      if (words.length === 0) {
-        return;
-      }
-
-      // 创建文档片段
       const fragment = document.createDocumentFragment();
       let lastIndex = 0;
 
@@ -126,16 +212,17 @@
           );
         }
 
-        // 检查是否需要翻译
-        const needsTranslation = window.mockVocabulary && 
-                                window.mockVocabulary.needsTranslation(word);
+        // 从缓存获取判断结果
+        const wordLower = word.toLowerCase();
+        const cached = this.vocabularyCache.get(wordLower);
+        const needsTranslation = cached ? cached.needs_translation : false;
 
         if (needsTranslation) {
           // 包装需要翻译的单词
           const span = document.createElement('span');
           span.className = 'vocab-word vocab-needs-translation';
           span.textContent = word;
-          span.dataset.word = word.toLowerCase();
+          span.dataset.word = wordLower;
           
           // 添加事件监听
           this.attachEventListeners(span);
@@ -147,7 +234,7 @@
           const span = document.createElement('span');
           span.className = 'vocab-word';
           span.textContent = word;
-          span.dataset.word = word.toLowerCase();
+          span.dataset.word = wordLower;
           
           // 添加事件监听（支持强制显示翻译）
           this.attachEventListeners(span);
@@ -187,12 +274,12 @@
     }
 
     // 桌面端：鼠标进入
-    handleMouseEnter(e, span) {
+    async handleMouseEnter(e, span) {
       const word = span.dataset.word;
       const needsTranslation = span.classList.contains('vocab-needs-translation');
       
       if (needsTranslation && window.translationTooltip) {
-        const translation = window.mockVocabulary.getTranslation(word);
+        const translation = await this.getTranslation(word);
         if (translation) {
           window.translationTooltip.show(span, word, translation);
         }
@@ -207,15 +294,16 @@
     }
 
     // 桌面端：双击强制显示翻译
-    handleDoubleClick(e, span) {
+    async handleDoubleClick(e, span) {
       e.preventDefault();
       const word = span.dataset.word;
       
-      // 查询翻译（即使是简单词也尝试显示）
-      let translation = window.mockVocabulary.getTranslation(word);
+      this.log(`Double-click on word: ${word}`);
+      
+      // 获取翻译
+      let translation = await this.getTranslation(word, true);
       
       if (!translation) {
-        // 如果没有翻译数据，显示提示
         translation = {
           translation: '(暂无翻译数据)',
           phonetic: ''
@@ -228,18 +316,18 @@
       
       // 记录用户主动请求翻译
       if (window.feedbackHandler) {
-        window.feedbackHandler.markAsUnknown(word);
+        await window.feedbackHandler.markAsUnknown(word);
       }
     }
 
     // 移动端：点击切换
-    handleMobileClick(e, span) {
+    async handleMobileClick(e, span) {
       e.preventDefault();
       const word = span.dataset.word;
       const needsTranslation = span.classList.contains('vocab-needs-translation');
       
       if (needsTranslation) {
-        const translation = window.mockVocabulary.getTranslation(word);
+        const translation = await this.getTranslation(word);
         if (translation && window.translationTooltip) {
           window.translationTooltip.toggle(span, word, translation);
         }
@@ -270,11 +358,13 @@
     }
 
     // 移动端：长按强制显示翻译
-    handleLongPress(e, span) {
+    async handleLongPress(e, span) {
       e.preventDefault();
       const word = span.dataset.word;
       
-      let translation = window.mockVocabulary.getTranslation(word);
+      this.log(`Long press on word: ${word}`);
+      
+      let translation = await this.getTranslation(word, true);
       
       if (!translation) {
         translation = {
@@ -289,7 +379,66 @@
       
       // 记录用户主动请求翻译
       if (window.feedbackHandler) {
-        window.feedbackHandler.markAsUnknown(word);
+        await window.feedbackHandler.markAsUnknown(word);
+      }
+    }
+
+    // 获取单词翻译（从缓存或API）
+    async getTranslation(word, forceAPI = false) {
+      // 先检查缓存
+      const cached = this.vocabularyCache.get(word);
+      
+      if (cached && cached.translation && !forceAPI) {
+        return cached.translation;
+      }
+
+      this.log(`Getting translation for: ${word}`);
+
+      try {
+        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
+          // 从API获取
+          const data = await window.apiClient.getWord(word);
+          
+          if (data && data.translation) {
+            // 更新缓存
+            this.vocabularyCache.set(word, {
+              needs_translation: data.needs_translation,
+              translation: data.translation,
+              timestamp: Date.now()
+            });
+            
+            return data.translation;
+          }
+        } else if (window.mockVocabulary) {
+          // 从Mock获取
+          return window.mockVocabulary.getTranslation(word);
+        }
+      } catch (error) {
+        console.error(`[TextProcessor] Failed to get translation for ${word}:`, error);
+        
+        // API失败，降级到Mock
+        if (window.mockVocabulary) {
+          return window.mockVocabulary.getTranslation(word);
+        }
+      }
+
+      return null;
+    }
+
+    // 清理过期缓存
+    cleanExpiredCache() {
+      const now = Date.now();
+      let cleanedCount = 0;
+      
+      for (const [word, data] of this.vocabularyCache.entries()) {
+        if (now - data.timestamp > this.cacheExpiry) {
+          this.vocabularyCache.delete(word);
+          cleanedCount++;
+        }
+      }
+      
+      if (cleanedCount > 0) {
+        this.log(`Cleaned ${cleanedCount} expired cache entries`);
       }
     }
 
@@ -315,4 +464,3 @@
   // 导出到全局
   window.TextProcessor = TextProcessor;
 })();
-
