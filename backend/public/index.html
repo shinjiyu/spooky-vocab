@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spooky Vocab - 复习系统</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      color: white;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 30px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .login-view, .main-view {
+      display: none;
+    }
+
+    .login-view.active, .main-view.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      margin-top: 10px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-item {
+      background: #f8f9fa;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 5px;
+    }
+
+    .stat-label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .flip-card {
+      perspective: 1000px;
+      height: 300px;
+      margin-bottom: 20px;
+    }
+
+    .flip-card-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+
+    .flip-card.flipped .flip-card-inner {
+      transform: rotateY(180deg);
+    }
+
+    .flip-card-front, .flip-card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 30px;
+    }
+
+    .flip-card-front {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .flip-card-back {
+      background: white;
+      border: 3px solid #667eea;
+      transform: rotateY(180deg);
+    }
+
+    .word-text {
+      font-size: 48px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    .phonetic-text {
+      font-size: 20px;
+      opacity: 0.9;
+    }
+
+    .translation-text {
+      font-size: 24px;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .context-text {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .grade-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .btn-grade {
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .btn-again {
+      background: #ff6b6b;
+      color: white;
+    }
+
+    .btn-hard {
+      background: #ffa502;
+      color: white;
+    }
+
+    .btn-good {
+      background: #4ecdc4;
+      color: white;
+    }
+
+    .btn-easy {
+      background: #95e1d3;
+      color: white;
+    }
+
+    .btn-grade:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .message {
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+
+    .message-success {
+      background: #d4edda;
+      color: #155724;
+    }
+
+    .message-error {
+      background: #f8d7da;
+      color: #721c24;
+    }
+
+    .message-info {
+      background: #d1ecf1;
+      color: #0c5460;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .word-text {
+        font-size: 36px;
+      }
+      
+      .translation-text {
+        font-size: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>👻 Spooky Vocab</h1>
+      <p>智能英语单词复习系统 | FSRS算法驱动</p>
+    </div>
+
+    <!-- 登录视图 -->
+    <div class="login-view active" id="loginView">
+      <div class="card">
+        <h2 style="margin-bottom: 20px; color: #333;">开始使用</h2>
+        <div class="form-group">
+          <label>用户ID</label>
+          <input type="text" id="userId" placeholder="输入用户ID" value="test_user">
+        </div>
+        <div class="form-group">
+          <label>API地址</label>
+          <input type="text" id="apiUrl" placeholder="API地址" value="http://localhost:3000">
+        </div>
+        <button class="btn btn-primary" onclick="app.login()">登录</button>
+        <div id="loginMessage"></div>
+      </div>
+    </div>
+
+    <!-- 主视图 -->
+    <div class="main-view" id="mainView">
+      <!-- 统计卡片 -->
+      <div class="card">
+        <h3 style="margin-bottom: 20px; color: #333;">学习统计</h3>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-value" id="statDueToday">-</div>
+            <div class="stat-label">今日待复习</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statCompleted">-</div>
+            <div class="stat-label">今日已完成</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statTotal">-</div>
+            <div class="stat-label">总词汇量</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="statStreak">-</div>
+            <div class="stat-label">连续学习天数</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="app.startReview()">开始复习</button>
+        <button class="btn btn-secondary" onclick="app.loadStats()">刷新统计</button>
+      </div>
+
+      <!-- 复习卡片 -->
+      <div class="card hidden" id="reviewCard">
+        <div id="reviewMessage"></div>
+        
+        <div class="flip-card" id="flipCard" onclick="app.flipCard()">
+          <div class="flip-card-inner">
+            <div class="flip-card-front">
+              <div class="word-text" id="wordText">-</div>
+              <div class="phonetic-text" id="phoneticText">-</div>
+              <p style="margin-top: 20px; opacity: 0.8; font-size: 14px;">点击翻转查看释义</p>
+            </div>
+            <div class="flip-card-back">
+              <div class="translation-text" id="translationText">-</div>
+              <div class="context-text" id="contextText">-</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grade-buttons">
+          <button class="btn-grade btn-again" onclick="app.submitGrade(1)">
+            😰 Again<br><small>完全不记得</small>
+          </button>
+          <button class="btn-grade btn-hard" onclick="app.submitGrade(2)">
+            😓 Hard<br><small>很难想起</small>
+          </button>
+          <button class="btn-grade btn-good" onclick="app.submitGrade(3)">
+            😊 Good<br><small>正常记起</small>
+          </button>
+          <button class="btn-grade btn-easy" onclick="app.submitGrade(4)">
+            😎 Easy<br><small>轻松记起</small>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const app = {
+      apiUrl: '',
+      token: '',
+      currentCard: null,
+      cards: [],
+      currentIndex: 0,
+      reviewStartTime: null,
+
+      // 登录
+      async login() {
+        const userId = document.getElementById('userId').value.trim();
+        const apiUrl = document.getElementById('apiUrl').value.trim();
+
+        if (!userId || !apiUrl) {
+          this.showMessage('loginMessage', 'error', '请填写用户ID和API地址');
+          return;
+        }
+
+        this.apiUrl = apiUrl;
+
+        try {
+          this.showMessage('loginMessage', 'info', '正在连接...');
+          
+          // 获取JWT token
+          const response = await fetch(`${apiUrl}/api/auth/test-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+          });
+
+          const data = await response.json();
+          
+          if (data.success) {
+            this.token = data.data.token;
+            localStorage.setItem('token', this.token);
+            localStorage.setItem('apiUrl', this.apiUrl);
+            localStorage.setItem('userId', userId);
+            
+            this.showMessage('loginMessage', 'success', '登录成功！');
+            
+            setTimeout(() => {
+              document.getElementById('loginView').classList.remove('active');
+              document.getElementById('mainView').classList.add('active');
+              this.loadStats();
+            }, 500);
+          } else {
+            this.showMessage('loginMessage', 'error', '登录失败：' + data.error.message);
+          }
+        } catch (error) {
+          this.showMessage('loginMessage', 'error', '连接失败：' + error.message);
+        }
+      },
+
+      // 加载统计数据
+      async loadStats() {
+        try {
+          const response = await this.apiRequest('/api/sr/stats');
+          
+          if (response.success) {
+            const stats = response.data;
+            document.getElementById('statDueToday').textContent = stats.overview.due_today;
+            document.getElementById('statCompleted').textContent = stats.overview.completed_today;
+            document.getElementById('statTotal').textContent = stats.overview.total_cards;
+            document.getElementById('statStreak').textContent = stats.activity.study_streak_days;
+          }
+        } catch (error) {
+          console.error('加载统计失败:', error);
+        }
+      },
+
+      // 开始复习
+      async startReview() {
+        try {
+          // 获取待复习单词
+          const response = await this.apiRequest('/api/sr/due?limit=20');
+          
+          if (response.success) {
+            this.cards = response.data.cards;
+            this.currentIndex = 0;
+            
+            if (this.cards.length === 0) {
+              alert('🎉 太棒了！当前没有需要复习的单词！');
+              return;
+            }
+            
+            document.getElementById('reviewCard').classList.remove('hidden');
+            this.showCard(this.cards[0]);
+          }
+        } catch (error) {
+          alert('获取复习单词失败：' + error.message);
+        }
+      },
+
+      // 显示卡片
+      showCard(card) {
+        this.currentCard = card;
+        this.reviewStartTime = Date.now();
+        
+        document.getElementById('wordText').textContent = card.word;
+        document.getElementById('phoneticText').textContent = card.phonetic || '';
+        document.getElementById('translationText').textContent = card.translation;
+        
+        // 显示例句
+        if (card.contexts && card.contexts.length > 0) {
+          document.getElementById('contextText').textContent = card.contexts[0].sentence;
+        } else {
+          document.getElementById('contextText').textContent = '';
+        }
+        
+        // 重置翻转状态
+        document.getElementById('flipCard').classList.remove('flipped');
+        
+        // 更新进度
+        this.showMessage('reviewMessage', 'info', 
+          `进度: ${this.currentIndex + 1}/${this.cards.length} | FSRS状态: ${this.getStateName(card.fsrs.state)}`);
+      },
+
+      // 翻转卡片
+      flipCard() {
+        document.getElementById('flipCard').classList.toggle('flipped');
+      },
+
+      // 提交评分
+      async submitGrade(grade) {
+        if (!this.currentCard) return;
+        
+        const word = this.currentCard.word;
+        const duration = Math.floor((Date.now() - this.reviewStartTime) / 1000);
+        
+        try {
+          const response = await this.apiRequest('/api/sr/review', {
+            method: 'POST',
+            body: JSON.stringify({ word, grade, duration_seconds: duration })
+          });
+          
+          if (response.success) {
+            const result = response.data.result;
+            const nextInterval = result.next_interval_days;
+            
+            this.showMessage('reviewMessage', 'success', 
+              `✓ 已记录！下次复习: ${nextInterval.toFixed(1)}天后`);
+            
+            // 延迟显示下一张卡片
+            setTimeout(() => {
+              this.nextCard();
+            }, 1000);
+          }
+        } catch (error) {
+          this.showMessage('reviewMessage', 'error', '提交失败：' + error.message);
+        }
+      },
+
+      // 下一张卡片
+      nextCard() {
+        this.currentIndex++;
+        
+        if (this.currentIndex >= this.cards.length) {
+          // 复习完成
+          document.getElementById('reviewCard').classList.add('hidden');
+          alert('🎉 本轮复习完成！');
+          this.loadStats();
+        } else {
+          this.showCard(this.cards[this.currentIndex]);
+        }
+      },
+
+      // API请求封装
+      async apiRequest(endpoint, options = {}) {
+        const url = `${this.apiUrl}${endpoint}`;
+        const config = {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.token}`,
+            ...options.headers
+          }
+        };
+        
+        const response = await fetch(url, config);
+        return await response.json();
+      },
+
+      // 显示消息
+      showMessage(elementId, type, message) {
+        const element = document.getElementById(elementId);
+        element.className = `message message-${type}`;
+        element.textContent = message;
+        element.classList.remove('hidden');
+      },
+
+      // 获取状态名称
+      getStateName(state) {
+        const names = ['新卡片', '学习中', '复习中', '重新学习'];
+        return names[state] || '未知';
+      },
+
+      // 初始化
+      init() {
+        // 尝试从localStorage恢复登录状态
+        const savedToken = localStorage.getItem('token');
+        const savedApiUrl = localStorage.getItem('apiUrl');
+        
+        if (savedToken && savedApiUrl) {
+          this.token = savedToken;
+          this.apiUrl = savedApiUrl;
+          document.getElementById('loginView').classList.remove('active');
+          document.getElementById('mainView').classList.add('active');
+          this.loadStats();
+        }
+      }
+    };
+
+    // 页面加载完成后初始化
+    window.addEventListener('DOMContentLoaded', () => {
+      app.init();
+    });
+  </script>
+</body>
+</html>
+

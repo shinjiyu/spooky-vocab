@@ -21,6 +21,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// 静态文件服务（复习界面）
+app.use('/review', express.static(path.join(__dirname, '../public')));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ 

@@ -19,6 +19,9 @@ RUN npm ci --only=production
 # 复制应用代码
 COPY src ./src
 
+# 复制静态文件（复习界面）
+COPY public ./public
+
 # 创建数据目录
 RUN mkdir -p /app/data
 
