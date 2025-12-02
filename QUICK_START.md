@@ -1,8 +1,38 @@
 # 快速开始指南
 
-## 阶段一：前端Mock版本已完成 ✅
+## 🎯 选择部署方式
 
-所有核心功能已实现，可以进行测试。
+### 方式1: 🐳 Docker部署（推荐）
+
+**优点：**
+- ✅ 一键启动，无需手动配置
+- ✅ 环境隔离，不污染本地
+- ✅ 易于部署到服务器
+
+**快速启动：**
+```bash
+# 1. 准备词典（首次运行，约206MB下载）
+cd backend/data
+curl -L -o ecdict.zip "https://github.com/skywind3000/ECDICT/releases/download/1.0.28/ecdict-sqlite-28.zip"
+unzip ecdict.zip && mv stardict.db ecdict.db && rm ecdict.zip
+cd ../..
+
+# 2. 启动服务
+docker-compose up -d
+
+# 3. 验证
+curl http://localhost:3000/health
+```
+
+**详细文档：** 请查看 [`DOCKER_DEPLOYMENT.md`](DOCKER_DEPLOYMENT.md)
+
+---
+
+### 方式2: 📦 本地Node.js部署
+
+适合开发和调试。
+
+---
 
 ## 安装步骤
 

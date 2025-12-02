@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: spooky-vocab-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_in_production}
+      - JWT_EXPIRATION=24h
+    volumes:
+      # 挂载数据目录（持久化数据库）
+      - ./backend/data:/app/data
+      # 开发模式：挂载源代码（可选，用于热重载）
+      # - ./backend/src:/app/src
+    networks:
+      - spooky-vocab-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  spooky-vocab-network:
+    driver: bridge
+
+volumes:
+  backend-data:
+    driver: local
+
