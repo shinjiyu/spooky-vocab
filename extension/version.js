@@ -4,8 +4,8 @@
 
 window.VOCAB_HELPER_VERSION = {
   version: '1.0.0',
-  buildDate: '2025-11-30',
-  gitCommit: 'e1f89d8',
+  buildDate: '2025-12-02',
+  gitCommit: '8228bd2',
   mode: 'API', // API模式（已移除Mock）
   features: [
     'ECDICT词典 (340万词)',
