@@ -37,12 +37,14 @@ const vocabularyRoutes = require('./routes/vocabulary');
 const feedbackRoutes = require('./routes/feedback');
 const reviewRoutes = require('./routes/review');
 const userRoutes = require('./routes/user');
+const srRoutes = require('./routes/spaced-repetition');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/vocabulary', vocabularyRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/review', reviewRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/sr', srRoutes);
 
 // 404 handler
 app.use((req, res) => {
@@ -71,15 +73,19 @@ app.listen(PORT, () => {
 ║   Port: ${PORT}                              ║
 ║   URL: http://localhost:${PORT}              ║
 ║                                           ║
-║   Endpoints:                              ║
+║   Core Endpoints:                         ║
 ║   - GET  /health                          ║
 ║   - POST /api/auth/test-token             ║
-║   - POST /api/auth/refresh                ║
 ║   - POST /api/vocabulary/batch-check      ║
 ║   - POST /api/feedback/known              ║
-║   - POST /api/feedback/unknown            ║
-║   - GET  /api/review/words                ║
-║   - PUT  /api/user/settings               ║
+║                                           ║
+║   FSRS Spaced Repetition (NEW):          ║
+║   - GET  /api/sr/due                      ║
+║   - POST /api/sr/review                   ║
+║   - GET  /api/sr/stats                    ║
+║   - POST /api/sr/reset                    ║
+║   - POST /api/sr/batch-info               ║
+║                                           ║
 ╚═══════════════════════════════════════════╝
   `);
 });
