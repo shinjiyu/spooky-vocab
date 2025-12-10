@@ -1,12 +1,14 @@
 // Spooky Vocab Backend Server
-// Express + SQLite API server for vocabulary learning
+// Express + MongoDB API server for vocabulary learning
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config();
 
-// Initialize database
-require('./utils/init-db');
+// Import database connection
+const { connectDatabase } = require('./utils/database');
+const { initDatabase } = require('./utils/init-db');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,15 +68,27 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`
+// Start server with database initialization
+async function startServer() {
+  try {
+    // Connect to MongoDB
+    await connectDatabase();
+    console.log('✓ MongoDB connected');
+    
+    // Initialize database (create collections and indexes)
+    await initDatabase();
+    console.log('✓ Database initialized');
+    
+    // Start Express server
+    app.listen(PORT, () => {
+      console.log(`
 ╔═══════════════════════════════════════════╗
 ║   👻 Spooky Vocab Backend Server          ║
 ║                                           ║
 ║   Status: Running                         ║
 ║   Port: ${PORT}                              ║
 ║   URL: http://localhost:${PORT}              ║
+║   Database: MongoDB                       ║
 ║                                           ║
 ║   Core Endpoints:                         ║
 ║   - GET  /health                          ║
@@ -90,8 +104,15 @@ app.listen(PORT, () => {
 ║   - POST /api/sr/batch-info               ║
 ║                                           ║
 ╚═══════════════════════════════════════════╝
-  `);
-});
+      `);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;
 

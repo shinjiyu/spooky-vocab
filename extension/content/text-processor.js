@@ -107,11 +107,43 @@
         return;
       }
 
-      // 检查API是否就绪
+      // 检查API是否就绪，如果没有则尝试自动初始化
       if (!window.VOCAB_HELPER_CONFIG.API_READY) {
-        this.log('⚠ API not ready. Please login first.');
-        console.warn('[VocabHelper] API not ready. Words cannot be checked. Please login.');
-        return;
+        this.log('⚠ API not ready, attempting auto-login...');
+        
+        // 尝试自动获取 token
+        try {
+          if (window.apiClient && window.jwtManager) {
+            // 获取或生成 user_id
+            const userId = await new Promise((resolve) => {
+              chrome.storage.local.get(['user_id'], (result) => {
+                if (result.user_id) {
+                  resolve(result.user_id);
+                } else {
+                  const newId = 'user_' + Math.random().toString(36).substr(2, 9);
+                  chrome.storage.local.set({ user_id: newId });
+                  resolve(newId);
+                }
+              });
+            });
+            
+            const result = await window.apiClient.getTestToken(userId, 'B1');
+            if (result && result.token) {
+              window.jwtManager.setToken(result.token);
+              window.VOCAB_HELPER_CONFIG.API_READY = true;
+              window.VOCAB_HELPER_CONFIG.apiReady = true;
+              this.log('✓ Auto-login successful');
+            }
+          }
+        } catch (error) {
+          console.warn('[VocabHelper] Auto-login failed:', error.message);
+        }
+        
+        // 再次检查
+        if (!window.VOCAB_HELPER_CONFIG.API_READY) {
+          this.log('⚠ API still not ready. Words will be processed without translation.');
+          return;
+        }
       }
 
       this.log(`🌐 Checking ${uncachedWords.length} words via API...`);
@@ -307,17 +339,31 @@
       }
     }
 
-    // 移动端：点击切换
+    // 移动端：点击显示翻译（所有单词都可点击）
     async handleMobileClick(e, span) {
       e.preventDefault();
-      const word = span.dataset.word;
-      const needsTranslation = span.classList.contains('vocab-needs-translation');
+      e.stopPropagation();
       
-      if (needsTranslation) {
-        const translation = await this.getTranslation(word);
-        if (translation && window.translationTooltip) {
-          window.translationTooltip.toggle(span, word, translation);
-        }
+      const word = span.dataset.word;
+      
+      // 添加点击视觉反馈
+      span.classList.add('vocab-clicked');
+      setTimeout(() => span.classList.remove('vocab-clicked'), 150);
+      
+      this.log(`Mobile click on word: ${word}`);
+      
+      // 获取翻译
+      let translation = await this.getTranslation(word, true);
+      
+      if (!translation) {
+        translation = {
+          translation: '(暂无翻译数据)',
+          phonetic: ''
+        };
+      }
+      
+      if (window.translationTooltip) {
+        window.translationTooltip.toggle(span, word, translation);
       }
     }
 

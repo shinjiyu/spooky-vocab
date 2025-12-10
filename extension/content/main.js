@@ -11,9 +11,10 @@
   window.VOCAB_HELPER_CONFIG = {
     isMobile: isMobile,
     enabled: true,
-    debug: window.CONFIG && window.CONFIG.features.debugMode,
+    DEBUG_MODE: window.CONFIG?.features?.debugMode || false,
     useAPI: true,  // 是否使用真实API（false则使用mock）
-    apiReady: false  // API是否就绪
+    apiReady: false,  // API是否就绪
+    API_READY: false  // 兼容旧代码
   };
 
   // 调试日志
@@ -129,6 +130,7 @@
     }
     
     window.VOCAB_HELPER_CONFIG.apiReady = true;
+    window.VOCAB_HELPER_CONFIG.API_READY = true;  // 兼容旧代码
     log('API ready');
   }
 
@@ -153,10 +155,58 @@
   }
 
   /**
+   * 注入全局样式
+   */
+  function injectStyles() {
+    const styleId = 'vocab-helper-styles';
+    if (document.getElementById(styleId)) return;
+    
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      /* 需要翻译的单词 - 轻微下划线 */
+      .vocab-needs-translation {
+        border-bottom: 1px dashed rgba(102, 126, 234, 0.5);
+        cursor: pointer;
+      }
+      
+      /* 所有单词在手机端的点击区域 */
+      .vocab-word {
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+      }
+      
+      /* 点击反馈效果 */
+      .vocab-clicked {
+        background-color: rgba(102, 126, 234, 0.2) !important;
+        border-radius: 3px;
+      }
+      
+      /* 手机端优化 - 增大点击区域 */
+      @media (max-width: 768px) {
+        .vocab-word {
+          padding: 2px 0;
+          margin: -2px 0;
+        }
+        
+        .vocab-needs-translation {
+          border-bottom-width: 2px;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    log('Styles injected');
+  }
+
+  /**
    * 初始化各功能模块
    */
   function initializeModules() {
     log('Initializing modules...');
+    
+    // 注入样式
+    injectStyles();
 
     // 初始化反馈处理器
     if (typeof window.FeedbackHandler !== 'undefined') {

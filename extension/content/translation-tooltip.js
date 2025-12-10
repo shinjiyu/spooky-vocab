@@ -122,10 +122,10 @@
         }
 
         .tooltip-phonetic {
-          color: #aaaaaa;
-          font-size: ${this.isMobile ? '14px' : '12px'};
-          margin-bottom: ${this.isMobile ? '6px' : '4px'};
-          font-style: italic;
+          color: #88ccff;
+          font-size: ${this.isMobile ? '15px' : '13px'};
+          margin-bottom: ${this.isMobile ? '8px' : '6px'};
+          font-family: 'Lucida Sans Unicode', 'Times New Roman', serif;
         }
 
         .tooltip-translation {
@@ -173,7 +173,7 @@
           <span class="tooltip-word">${word}</span>
           <button class="tooltip-close" data-action="close" title="我认识这个词">✓</button>
         </div>
-        ${translation.phonetic ? `<div class="tooltip-phonetic">${translation.phonetic}</div>` : ''}
+        ${translation.phonetic ? `<div class="tooltip-phonetic">/${translation.phonetic}/</div>` : ''}
         <div class="tooltip-translation">${translation.translation}</div>
         <div class="tooltip-arrow"></div>
       `;

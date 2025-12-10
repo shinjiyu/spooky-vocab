@@ -1,133 +1,78 @@
 // Database initialization script
-// Creates tables if they don't exist
+// Creates collections and indexes for MongoDB
 
-const { userDb, dbRun } = require('./database');
+const { connectDatabase, getDb, closeDatabase } = require('./database');
 
 async function initDatabase() {
-  console.log('Initializing database...');
+  console.log('Initializing MongoDB database...');
 
   try {
-    // Create user_settings table
-    await dbRun(userDb, `
-      CREATE TABLE IF NOT EXISTS user_settings (
-        user_id TEXT PRIMARY KEY,
-        cefr_level TEXT DEFAULT 'B1',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+    // 连接数据库
+    await connectDatabase();
+    const db = getDb();
 
-    // Create word_records table
-    await dbRun(userDb, `
-      CREATE TABLE IF NOT EXISTS word_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        word TEXT NOT NULL,
-        familiarity_score INTEGER DEFAULT 0,
-        encounter_count INTEGER DEFAULT 0,
-        known_feedback_count INTEGER DEFAULT 0,
-        unknown_feedback_count INTEGER DEFAULT 0,
-        last_encountered DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, word)
-      )
-    `);
+    // 创建集合和索引
+    console.log('Creating collections and indexes...');
 
-    // Create index for faster lookups
-    await dbRun(userDb, `
-      CREATE INDEX IF NOT EXISTS idx_word_records_user_word 
-      ON word_records(user_id, word)
-    `);
+    // 1. user_settings 集合
+    console.log('  Setting up user_settings collection...');
+    const userSettings = db.collection('user_settings');
+    await userSettings.createIndex({ user_id: 1 }, { unique: true });
+    console.log('    ✓ Created unique index on user_id');
 
-    // Create word_contexts table
-    await dbRun(userDb, `
-      CREATE TABLE IF NOT EXISTS word_contexts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        word TEXT NOT NULL,
-        sentence TEXT,
-        url TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create index for contexts
-    await dbRun(userDb, `
-      CREATE INDEX IF NOT EXISTS idx_word_contexts_user_word 
-      ON word_contexts(user_id, word)
-    `);
-
-    // ===== FSRS扩展：添加间隔重复算法所需字段 =====
-    console.log('Checking FSRS columns...');
+    // 2. word_records 集合
+    console.log('  Setting up word_records collection...');
+    const wordRecords = db.collection('word_records');
     
-    // 添加FSRS字段（使用ALTER TABLE保持向后兼容）
-    const fsrsColumns = [
-      { name: 'stability', type: 'REAL DEFAULT 0', description: '记忆稳定性（天）' },
-      { name: 'difficulty', type: 'REAL DEFAULT 5.0', description: '单词难度 (1-10)' },
-      { name: 'state', type: 'INTEGER DEFAULT 0', description: '卡片状态 (0=new, 1=learning, 2=review, 3=relearning)' },
-      { name: 'due_date', type: 'DATETIME', description: '下次复习到期时间' },
-      { name: 'last_review', type: 'DATETIME', description: '最后复习时间' },
-      { name: 'reps', type: 'INTEGER DEFAULT 0', description: '重复次数' },
-      { name: 'lapses', type: 'INTEGER DEFAULT 0', description: '遗忘次数' }
-    ];
+    // 复合唯一索引：user_id + word
+    await wordRecords.createIndex(
+      { user_id: 1, word: 1 }, 
+      { unique: true }
+    );
+    console.log('    ✓ Created unique compound index on user_id + word');
+    
+    // FSRS相关索引
+    await wordRecords.createIndex({ user_id: 1, due_date: 1 });
+    console.log('    ✓ Created index on user_id + due_date');
+    
+    await wordRecords.createIndex({ user_id: 1, state: 1 });
+    console.log('    ✓ Created index on user_id + state');
+    
+    await wordRecords.createIndex({ last_encountered: 1 });
+    console.log('    ✓ Created index on last_encountered');
 
-    for (const column of fsrsColumns) {
-      try {
-        // SQLite的ALTER TABLE ADD COLUMN是幂等的，如果列已存在会报错但不影响
-        await dbRun(userDb, `
-          ALTER TABLE word_records ADD COLUMN ${column.name} ${column.type}
-        `);
-        console.log(`  ✓ Added column: ${column.name} (${column.description})`);
-      } catch (error) {
-        // 如果列已存在，忽略错误
-        if (error.message.includes('duplicate column name')) {
-          console.log(`  - Column ${column.name} already exists`);
-        } else {
-          throw error;
-        }
-      }
-    }
+    // 3. word_contexts 集合
+    console.log('  Setting up word_contexts collection...');
+    const wordContexts = db.collection('word_contexts');
+    await wordContexts.createIndex({ user_id: 1, word: 1 });
+    console.log('    ✓ Created compound index on user_id + word');
+    
+    await wordContexts.createIndex({ created_at: 1 });
+    console.log('    ✓ Created index on created_at');
 
-    // 创建FSRS查询优化索引
-    await dbRun(userDb, `
-      CREATE INDEX IF NOT EXISTS idx_word_records_due_date 
-      ON word_records(user_id, due_date)
-    `);
-    console.log('  ✓ Created index on due_date');
+    // 4. review_log 集合
+    console.log('  Setting up review_log collection...');
+    const reviewLog = db.collection('review_log');
+    await reviewLog.createIndex({ user_id: 1, review_time: 1 });
+    console.log('    ✓ Created compound index on user_id + review_time');
+    
+    await reviewLog.createIndex({ user_id: 1, word: 1 });
+    console.log('    ✓ Created compound index on user_id + word');
 
-    await dbRun(userDb, `
-      CREATE INDEX IF NOT EXISTS idx_word_records_state 
-      ON word_records(user_id, state)
-    `);
-    console.log('  ✓ Created index on state');
+    // 5. ecdict 集合（如果需要词典数据）
+    console.log('  Setting up ecdict collection...');
+    const ecdict = db.collection('ecdict');
+    await ecdict.createIndex({ word: 1 }, { unique: true });
+    console.log('    ✓ Created unique index on word');
 
-    // 创建review_log表用于统计和参数优化
-    await dbRun(userDb, `
-      CREATE TABLE IF NOT EXISTS review_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        word TEXT NOT NULL,
-        grade INTEGER NOT NULL,
-        state INTEGER NOT NULL,
-        stability REAL,
-        difficulty REAL,
-        elapsed_days REAL,
-        last_elapsed_days REAL,
-        scheduled_days REAL,
-        review_duration_seconds INTEGER,
-        review_time DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-    console.log('  ✓ Created review_log table');
-
-    await dbRun(userDb, `
-      CREATE INDEX IF NOT EXISTS idx_review_log_user_time 
-      ON review_log(user_id, review_time)
-    `);
-    console.log('  ✓ Created index on review_log');
-
-    console.log('✅ Database initialized successfully (with FSRS support)');
+    console.log('✅ MongoDB database initialized successfully (with FSRS support)');
+    console.log('\nCollections created:');
+    console.log('  - user_settings');
+    console.log('  - word_records (with FSRS fields)');
+    console.log('  - word_contexts');
+    console.log('  - review_log');
+    console.log('  - ecdict');
+    
     return true;
   } catch (error) {
     console.error('❌ Failed to initialize database:', error);
@@ -137,12 +82,17 @@ async function initDatabase() {
 
 // Run initialization if this file is executed directly
 if (require.main === module) {
-  initDatabase().then(() => {
-    process.exit(0);
-  }).catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+  initDatabase()
+    .then(() => {
+      console.log('\nInitialization complete!');
+      closeDatabase();
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('\nInitialization failed:', error);
+      closeDatabase();
+      process.exit(1);
+    });
 }
 
 module.exports = { initDatabase };

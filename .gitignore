@@ -36,6 +36,10 @@ logs/
 # Environment variables
 .env
 .env.local
+.env.*
+
+# Sensitive docs
+*MIGRATION*.md
 
 # Temporary files
 tmp/
@@ -60,3 +64,4 @@ coverage/
 .Spotlight-V100
 .Trashes
 
+.playwright-mcp/

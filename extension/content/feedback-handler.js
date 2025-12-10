@@ -149,20 +149,48 @@
 
     // 保存同步队列到本地存储
     saveSyncQueue() {
-      chrome.storage.local.set({ syncQueue: this.syncQueue });
+      if (!this.isContextValid()) return;
+      
+      try {
+        chrome.storage.local.set({ syncQueue: this.syncQueue });
+      } catch (e) {
+        console.warn('[FeedbackHandler] Failed to save sync queue:', e.message);
+      }
     }
 
     // 从本地存储加载同步队列
     async loadSyncQueue() {
+      if (!this.isContextValid()) return;
+      
       return new Promise((resolve) => {
-        chrome.storage.local.get(['syncQueue'], (result) => {
-          if (result.syncQueue) {
-            this.syncQueue = result.syncQueue;
-            this.log(`Loaded ${this.syncQueue.length} items from sync queue`);
-          }
+        try {
+          chrome.storage.local.get(['syncQueue'], (result) => {
+            if (chrome.runtime.lastError) {
+              console.warn('[FeedbackHandler] Load error:', chrome.runtime.lastError);
+              resolve();
+              return;
+            }
+            
+            if (result.syncQueue) {
+              this.syncQueue = result.syncQueue;
+              this.log(`Loaded ${this.syncQueue.length} items from sync queue`);
+            }
+            resolve();
+          });
+        } catch (e) {
+          console.warn('[FeedbackHandler] Failed to load sync queue:', e.message);
           resolve();
-        });
+        }
       });
+    }
+
+    // 检查扩展上下文是否有效
+    isContextValid() {
+      try {
+        return chrome.runtime && chrome.runtime.id;
+      } catch (e) {
+        return false;
+      }
     }
 
     // 记录单词遇到日志（本地）
@@ -177,18 +205,33 @@
 
       this.encounterLog.push(encounter);
 
+      // 检查扩展上下文是否有效
+      if (!this.isContextValid()) {
+        this.log('⚠ Extension context invalidated, skipping storage');
+        return;
+      }
+
       // 保存到本地存储
-      chrome.storage.local.get(['encounterHistory'], (result) => {
-        const history = result.encounterHistory || [];
-        history.push(encounter);
+      try {
+        chrome.storage.local.get(['encounterHistory'], (result) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[FeedbackHandler] Storage error:', chrome.runtime.lastError);
+            return;
+          }
+          
+          const history = result.encounterHistory || [];
+          history.push(encounter);
 
-        // 只保留最近1000条记录
-        if (history.length > 1000) {
-          history.splice(0, history.length - 1000);
-        }
+          // 只保留最近1000条记录
+          if (history.length > 1000) {
+            history.splice(0, history.length - 1000);
+          }
 
-        chrome.storage.local.set({ encounterHistory: history });
-      });
+          chrome.storage.local.set({ encounterHistory: history });
+        });
+      } catch (e) {
+        console.warn('[FeedbackHandler] Failed to access storage:', e.message);
+      }
     }
 
     // 获取本次会话统计
@@ -206,9 +249,38 @@
 
     // 获取历史记录
     getHistory(callback) {
-      chrome.storage.local.get(['encounterHistory'], (result) => {
-        callback(result.encounterHistory || []);
-      });
+      if (!this.isContextValid()) {
+        callback([]);
+        return;
+      }
+      
+      try {
+        chrome.storage.local.get(['encounterHistory'], (result) => {
+          if (chrome.runtime.lastError) {
+            callback([]);
+            return;
+          }
+          callback(result.encounterHistory || []);
+        });
+      } catch (e) {
+        callback([]);
+      }
+    }
+
+    // 通知 Popup 刷新数据
+    notifyPopupRefresh() {
+      if (!this.isContextValid()) return;
+      
+      try {
+        chrome.runtime.sendMessage({ action: 'refreshStats' }, (response) => {
+          // 忽略响应，这只是一个通知
+          if (chrome.runtime.lastError) {
+            // 忽略错误（Popup 可能未打开）
+          }
+        });
+      } catch (e) {
+        // 忽略错误
+      }
     }
 
     // 获取统计数据（从API）
@@ -228,16 +300,28 @@
 
     // 清除历史记录
     clearHistory() {
-      chrome.storage.local.set({ 
-        encounterHistory: [],
-        syncQueue: []
-      }, () => {
+      if (!this.isContextValid()) {
         this.encounterLog = [];
         this.knownCount = 0;
         this.unknownCount = 0;
         this.syncQueue = [];
-        this.log('History cleared');
-      });
+        return;
+      }
+      
+      try {
+        chrome.storage.local.set({ 
+          encounterHistory: [],
+          syncQueue: []
+        }, () => {
+          this.encounterLog = [];
+          this.knownCount = 0;
+          this.unknownCount = 0;
+          this.syncQueue = [];
+          this.log('History cleared');
+        });
+      } catch (e) {
+        console.warn('[FeedbackHandler] Failed to clear history:', e.message);
+      }
     }
 
     log(...args) {

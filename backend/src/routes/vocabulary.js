@@ -4,11 +4,51 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const { userDb, dbGet, dbRun, dbAll } = require('../utils/database');
+const { getCollection } = require('../utils/database');
 const dictionaryService = require('../services/dictionary');
 
 // Apply auth middleware to all routes
 router.use(authMiddleware);
+
+/**
+ * 验证单词是否有效（可入库）
+ * @param {string} word - 单词
+ * @param {Object} dictEntry - 词典条目（可选）
+ * @returns {Object} { valid: boolean, reason: string }
+ */
+function isValidWord(word, dictEntry = null) {
+  const lowerWord = word.toLowerCase();
+  
+  // 1. 长度检查：太短或太长的都不行
+  if (lowerWord.length < 2 || lowerWord.length > 30) {
+    return { valid: false, reason: 'invalid_length' };
+  }
+  
+  // 2. 格式检查：只允许纯英文字母（可包含连字符和撇号）
+  // 但不允许纯数字、特殊字符开头/结尾
+  const validPattern = /^[a-z]([a-z'-]*[a-z])?$/;
+  if (!validPattern.test(lowerWord)) {
+    return { valid: false, reason: 'invalid_format' };
+  }
+  
+  // 3. 不允许连续的特殊字符
+  if (/[-']{2,}/.test(lowerWord)) {
+    return { valid: false, reason: 'invalid_format' };
+  }
+  
+  // 4. 如果提供了词典条目，检查是否存在
+  if (dictEntry === null) {
+    // 没有词典数据时，放行（稍后在词典中检查）
+    return { valid: true, reason: 'no_dict_check' };
+  }
+  
+  // 5. 词典中必须存在（有翻译）
+  if (!dictEntry || !dictEntry.translation) {
+    return { valid: false, reason: 'not_in_dictionary' };
+  }
+  
+  return { valid: true, reason: 'ok' };
+}
 
 /**
  * 简单的词汇判断逻辑（在没有ECDICT的情况下）
@@ -94,12 +134,12 @@ router.post('/batch-check', async (req, res) => {
   }
 
   try {
-    // Get user settings
-    const userSettings = await dbGet(userDb, `
-      SELECT cefr_level FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const userSettings = getCollection('user_settings');
+    const wordRecords = getCollection('word_records');
 
-    const userLevel = userSettings?.cefr_level || 'B1';
+    // Get user settings
+    const settings = await userSettings.findOne({ user_id });
+    const userLevel = settings?.cefr_level || 'B1';
 
     // Batch lookup translations if dictionary available
     let dictEntries = {};
@@ -113,50 +153,36 @@ router.post('/batch-check', async (req, res) => {
       const lowerWord = word.toLowerCase();
 
       // Get user's record for this word
-      let wordRecord = await dbGet(userDb, `
-        SELECT * FROM word_records 
-        WHERE user_id = ? AND word = ?
-      `, [user_id, lowerWord]);
+      let wordRecord = await wordRecords.findOne({ user_id, word: lowerWord });
 
       // Get dictionary entry
       const dictEntry = dictEntries[lowerWord];
       
-      // Calculate initial score using dictionary data if available
-      let initialScore;
-      if (dictEntry && !wordRecord) {
-        // Use dictionary-based scoring
+      // Calculate score (不创建记录，只计算)
+      let familiarityScore;
+      if (wordRecord) {
+        // 使用已有记录的分数
+        familiarityScore = wordRecord.familiarity_score;
+      } else if (dictEntry) {
+        // 使用词典难度评估
         const difficulty = await dictionaryService.getDifficulty(lowerWord);
-        initialScore = difficulty.score;
-      } else if (wordRecord) {
-        // Use existing score
-        initialScore = wordRecord.familiarity_score;
+        familiarityScore = difficulty.score;
       } else {
-        // Fallback to simple judgment
-        const judgment = simpleWordJudgment(lowerWord, userLevel, wordRecord);
-        initialScore = judgment.score;
+        // 使用简单判断（单词不在词典中，可能是无效词）
+        const judgment = simpleWordJudgment(lowerWord, userLevel, null);
+        familiarityScore = judgment.score;
       }
       
-      // 如果没有记录，创建一个
-      if (!wordRecord) {
-        await dbRun(userDb, `
-          INSERT INTO word_records (
-            user_id, word, familiarity_score, encounter_count
-          ) VALUES (?, ?, ?, 0)
-        `, [user_id, lowerWord, initialScore]);
-        
-        wordRecord = { 
-          familiarity_score: initialScore,
-          encounter_count: 0
-        };
-      }
+      // 注意：batch-check 不再创建记录！
+      // 只有用户真正触发翻译浮窗时才会通过 feedback/unknown 创建记录
 
       // Determine if translation needed
-      const needsTranslation = wordRecord.familiarity_score < 65;
+      const needsTranslation = familiarityScore < 65;
 
       // 构建响应
       results[lowerWord] = {
         needs_translation: needsTranslation,
-        familiarity_score: wordRecord.familiarity_score
+        familiarity_score: familiarityScore
       };
 
       // Include translation if requested and needed
@@ -206,20 +232,32 @@ router.get('/word/:word', async (req, res) => {
 
   try {
     const lowerWord = word.toLowerCase();
+    const wordRecords = getCollection('word_records');
+    const userSettings = getCollection('user_settings');
 
     // Get user's record for this word
-    const wordRecord = await dbGet(userDb, `
-      SELECT * FROM word_records 
-      WHERE user_id = ? AND word = ?
-    `, [user_id, lowerWord]);
+    const wordRecord = await wordRecords.findOne({ user_id, word: lowerWord });
 
     // Get user settings for judgment
-    const userSettings = await dbGet(userDb, `
-      SELECT cefr_level FROM user_settings WHERE user_id = ?
-    `, [user_id]);
-
-    const userLevel = userSettings?.cefr_level || 'B1';
+    const settings = await userSettings.findOne({ user_id });
+    const userLevel = settings?.cefr_level || 'B1';
     const judgment = simpleWordJudgment(lowerWord, userLevel, wordRecord);
+
+    // Get dictionary translation
+    let translation = {
+      translation: '(未找到翻译)',
+      phonetic: ''
+    };
+    
+    if (dictionaryService.isReady()) {
+      const dictEntry = await dictionaryService.lookup(lowerWord);
+      if (dictEntry) {
+        translation = {
+          translation: dictEntry.translation,
+          phonetic: dictEntry.phonetic || ''
+        };
+      }
+    }
 
     res.json({
       success: true,
@@ -227,10 +265,7 @@ router.get('/word/:word', async (req, res) => {
         word: lowerWord,
         needs_translation: judgment.needs_translation,
         familiarity_score: wordRecord?.familiarity_score || judgment.score,
-        translation: {
-          translation: '(需要安装ECDICT词典)',
-          phonetic: ''
-        },
+        translation: translation,
         user_record: wordRecord ? {
           encounter_count: wordRecord.encounter_count,
           known_feedback_count: wordRecord.known_feedback_count,

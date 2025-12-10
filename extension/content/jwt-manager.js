@@ -6,7 +6,9 @@
 
   class JWTManager {
     constructor() {
-      this.storageKey = window.CONFIG.jwt.storageKey;
+      // 使用默认值保护，防止CONFIG未加载
+      this.storageKey = window.CONFIG?.jwt?.storageKey || 'vocab_helper_jwt';
+      this.expiryBuffer = window.CONFIG?.jwt?.expiryBuffer || 300;
       this.token = null;
       this.payload = null;
       this.expiresAt = null;
@@ -104,7 +106,7 @@
       }
       
       // 检查是否过期（提前buffer时间）
-      const bufferMs = window.CONFIG.jwt.expiryBuffer * 1000;
+      const bufferMs = this.expiryBuffer * 1000;
       const isValid = Date.now() < (this.expiresAt - bufferMs);
       
       if (!isValid) {

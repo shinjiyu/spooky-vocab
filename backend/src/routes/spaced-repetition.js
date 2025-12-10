@@ -5,7 +5,7 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
 const fsrsService = require('../services/fsrs');
-const { userDb, dbAll, dbGet, dbRun } = require('../utils/database');
+const { getCollection } = require('../utils/database');
 
 // 应用认证中间件
 router.use(authMiddleware);
@@ -40,41 +40,68 @@ router.get('/due', async (req, res) => {
       include_new
     });
 
+    const wordRecords = getCollection('word_records');
+    const now = new Date();
+
     // 获取各状态计数
-    const now = new Date().toISOString();
-    const counts = await dbGet(userDb, `
-      SELECT 
-        SUM(CASE WHEN (due_date IS NOT NULL AND due_date <= ?) OR state = 0 THEN 1 ELSE 0 END) as due,
-        SUM(CASE WHEN state = 0 THEN 1 ELSE 0 END) as new,
-        SUM(CASE WHEN state = 1 THEN 1 ELSE 0 END) as learning,
-        SUM(CASE WHEN state = 2 THEN 1 ELSE 0 END) as review
-      FROM word_records
-      WHERE user_id = ?
-    `, [now, user_id]);
+    const countsResult = await wordRecords.aggregate([
+      { $match: { user_id } },
+      {
+        $group: {
+          _id: null,
+          due: {
+            $sum: {
+              $cond: [
+                {
+                  $or: [
+                    { $and: [{ $ne: ['$due_date', null] }, { $lte: ['$due_date', now] }] },
+                    { $eq: ['$state', 0] }
+                  ]
+                },
+                1,
+                0
+              ]
+            }
+          },
+          new: { $sum: { $cond: [{ $eq: ['$state', 0] }, 1, 0] } },
+          learning: { $sum: { $cond: [{ $eq: ['$state', 1] }, 1, 0] } },
+          review: { $sum: { $cond: [{ $eq: ['$state', 2] }, 1, 0] } }
+        }
+      }
+    ]).toArray();
+
+    const counts = countsResult[0] || {
+      due: 0,
+      new: 0,
+      learning: 0,
+      review: 0
+    };
 
     // 获取总数用于分页
-    const totalResult = await dbGet(userDb, `
-      SELECT COUNT(*) as total FROM word_records
-      WHERE user_id = ?
-        AND state IN (${states.join(',')})
-        AND (
-          due_date IS NULL 
-          OR due_date <= ?
-          ${include_new ? 'OR state = 0' : ''}
-        )
-    `, [user_id, now]);
+    const query = {
+      user_id,
+      state: { $in: states },
+      $or: [
+        { due_date: null },
+        { due_date: { $lte: now } }
+      ]
+    };
+    
+    if (include_new) {
+      query.$or.push({ state: 0 });
+    }
 
-    const total = totalResult?.total || 0;
+    const total = await wordRecords.countDocuments(query);
 
     res.json({
       success: true,
       data: {
         cards,
         counts: {
-          due: counts.due || 0,
-          new: counts.new || 0,
-          learning: counts.learning || 0,
-          review: counts.review || 0
+          due: counts.due,
+          new: counts.new,
+          learning: counts.learning,
+          review: counts.review
         },
         pagination: {
           total,
@@ -142,10 +169,13 @@ router.post('/review', async (req, res) => {
   try {
     console.log(`[SR API] Reviewing word: ${word}, grade: ${grade}, user: ${user_id}`);
 
+    const wordRecords = getCollection('word_records');
+    
     // 检查单词是否存在
-    const existingRecord = await dbGet(userDb, `
-      SELECT * FROM word_records WHERE user_id = ? AND word = ?
-    `, [user_id, word.toLowerCase()]);
+    const existingRecord = await wordRecords.findOne({ 
+      user_id, 
+      word: word.toLowerCase() 
+    });
 
     if (!existingRecord) {
       return res.status(404).json({
@@ -163,9 +193,10 @@ router.post('/review', async (req, res) => {
     const result = await fsrsService.reviewCard(user_id, word.toLowerCase(), grade, duration_seconds);
 
     // 获取完整的更新后卡片信息
-    const updatedRecord = await dbGet(userDb, `
-      SELECT * FROM word_records WHERE user_id = ? AND word = ?
-    `, [user_id, word.toLowerCase()]);
+    const updatedRecord = await wordRecords.findOne({ 
+      user_id, 
+      word: word.toLowerCase() 
+    });
 
     const enrichedCard = await fsrsService.enrichCardData(updatedRecord, user_id);
 
@@ -347,18 +378,28 @@ router.post('/batch-info', async (req, res) => {
   try {
     console.log(`[SR API] Batch info for ${words.length} words`);
 
+    const wordRecords = getCollection('word_records');
     const now = new Date();
     const cards = {};
 
     // 查询所有单词
-    const placeholders = words.map(() => '?').join(',');
     const lowerWords = words.map(w => w.toLowerCase());
     
-    const records = await dbAll(userDb, `
-      SELECT word, state, stability, difficulty, due_date, reps, lapses
-      FROM word_records
-      WHERE user_id = ? AND word IN (${placeholders})
-    `, [user_id, ...lowerWords]);
+    const records = await wordRecords
+      .find({
+        user_id,
+        word: { $in: lowerWords }
+      })
+      .project({
+        word: 1,
+        state: 1,
+        stability: 1,
+        difficulty: 1,
+        due_date: 1,
+        reps: 1,
+        lapses: 1
+      })
+      .toArray();
 
     // 构建结果映射
     const recordMap = {};
@@ -426,19 +467,25 @@ router.get('/contexts/:word', async (req, res) => {
   try {
     console.log(`[SR API] Getting contexts for word: ${word}`);
 
-    const contexts = await dbAll(userDb, `
-      SELECT id, sentence, url, created_at
-      FROM word_contexts
-      WHERE user_id = ? AND word = ?
-      ORDER BY created_at DESC
-      LIMIT ?
-    `, [user_id, word, limit]);
+    const wordContexts = getCollection('word_contexts');
+
+    const contexts = await wordContexts
+      .find({ user_id, word })
+      .sort({ created_at: -1 })
+      .limit(limit)
+      .project({ sentence: 1, url: 1, created_at: 1, _id: 1 })
+      .toArray();
 
     res.json({
       success: true,
       data: {
         word,
-        contexts,
+        contexts: contexts.map(c => ({
+          id: c._id,
+          sentence: c.sentence,
+          url: c.url,
+          created_at: c.created_at
+        })),
         total: contexts.length
       },
       meta: {
@@ -458,4 +505,3 @@ router.get('/contexts/:word', async (req, res) => {
 });
 
 module.exports = router;
-

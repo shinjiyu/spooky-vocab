@@ -6,10 +6,12 @@
 
   class APIClient {
     constructor() {
-      this.baseURL = window.CONFIG.api.baseURL;
-      this.timeout = window.CONFIG.api.timeout;
-      this.retryAttempts = window.CONFIG.api.retryAttempts;
-      this.retryDelay = window.CONFIG.api.retryDelay;
+      // 使用默认值保护，防止CONFIG未加载
+      this.baseURL = window.CONFIG?.api?.baseURL || 'http://localhost:3000';
+      this.timeout = window.CONFIG?.api?.timeout || 10000;
+      this.retryAttempts = window.CONFIG?.api?.retryAttempts || 3;
+      this.retryDelay = window.CONFIG?.api?.retryDelay || 1000;
+      this.maxBatchSize = window.CONFIG?.performance?.maxBatchSize || 100;
     }
 
     /**
@@ -199,13 +201,13 @@
       }
 
       // 限制批量大小
-      if (words.length > window.CONFIG.performance.maxBatchSize) {
-        this.log(`Batch size ${words.length} exceeds max ${window.CONFIG.performance.maxBatchSize}, splitting...`);
+      if (words.length > this.maxBatchSize) {
+        this.log(`Batch size ${words.length} exceeds max ${this.maxBatchSize}, splitting...`);
         
         // 分批处理
         const batches = [];
-        for (let i = 0; i < words.length; i += window.CONFIG.performance.maxBatchSize) {
-          batches.push(words.slice(i, i + window.CONFIG.performance.maxBatchSize));
+        for (let i = 0; i < words.length; i += this.maxBatchSize) {
+          batches.push(words.slice(i, i + this.maxBatchSize));
         }
         
         // 并发请求所有批次

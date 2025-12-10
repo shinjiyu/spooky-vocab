@@ -7,14 +7,17 @@ FROM node:18-alpine
 # 设置工作目录
 WORKDIR /app
 
-# 安装SQLite3（Alpine需要额外安装）
-RUN apk add --no-cache sqlite
+# 安装SQLite3和编译工具（better-sqlite3需要）
+RUN apk add --no-cache sqlite python3 make g++
 
 # 复制package文件
 COPY package*.json ./
 
 # 安装依赖（生产环境）
 RUN npm ci --only=production
+
+# 清理编译工具以减小镜像体积
+RUN apk del python3 make g++
 
 # 复制应用代码
 COPY src ./src

@@ -6,7 +6,7 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const authMiddleware = require('../middleware/auth');
 const { JWT_SECRET } = require('../middleware/auth');
-const { userDb, dbRun, dbGet } = require('../utils/database');
+const { getCollection } = require('../utils/database');
 
 /**
  * POST /api/auth/test-token
@@ -55,24 +55,33 @@ router.post('/test-token', async (req, res) => {
   try {
     // 创建或更新用户设置
     const level = cefr_level || 'B1';
+    const now = new Date();
     
-    await dbRun(userDb, `
-      INSERT INTO user_settings (user_id, cefr_level)
-      VALUES (?, ?)
-      ON CONFLICT(user_id) DO UPDATE SET
-        cefr_level = excluded.cefr_level,
-        updated_at = CURRENT_TIMESTAMP
-    `, [user_id, level]);
+    const userSettings = getCollection('user_settings');
+    await userSettings.updateOne(
+      { user_id },
+      {
+        $set: {
+          cefr_level: level,
+          updated_at: now
+        },
+        $setOnInsert: {
+          user_id,
+          created_at: now
+        }
+      },
+      { upsert: true }
+    );
 
     // 生成JWT token
-    const now = Math.floor(Date.now() / 1000);
+    const nowSeconds = Math.floor(Date.now() / 1000);
     const expiresIn = 86400; // 24小时
 
     const payload = {
       user_id,
       cefr_level: level,
-      iat: now,
-      exp: now + expiresIn
+      iat: nowSeconds,
+      exp: nowSeconds + expiresIn
     };
 
     const token = jwt.sign(payload, JWT_SECRET);
@@ -84,7 +93,7 @@ router.post('/test-token', async (req, res) => {
         token,
         user_id,
         expires_in: expiresIn,
-        expires_at: new Date((now + expiresIn) * 1000).toISOString()
+        expires_at: new Date((nowSeconds + expiresIn) * 1000).toISOString()
       },
       meta: {
         timestamp: new Date().toISOString()
@@ -112,11 +121,10 @@ router.post('/refresh', authMiddleware, async (req, res) => {
     const { user_id } = req.user;
 
     // 获取用户最新设置
-    const userSettings = await dbGet(userDb, `
-      SELECT cefr_level FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const userSettings = getCollection('user_settings');
+    const settings = await userSettings.findOne({ user_id });
 
-    const cefrLevel = userSettings?.cefr_level || 'B1';
+    const cefrLevel = settings?.cefr_level || 'B1';
 
     // 生成新token
     const now = Math.floor(Date.now() / 1000);
@@ -175,4 +183,3 @@ router.get('/verify', authMiddleware, (req, res) => {
 });
 
 module.exports = router;
-

@@ -4,7 +4,8 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const { userDb, dbGet, dbRun } = require('../utils/database');
+const { getCollection } = require('../utils/database');
+const { getOrCreateUserSettings } = require('../utils/mongo-helpers');
 
 // Apply auth middleware
 router.use(authMiddleware);
@@ -17,32 +18,28 @@ router.get('/settings', async (req, res) => {
   const user_id = req.user_id;
 
   try {
-    let userSettings = await dbGet(userDb, `
-      SELECT * FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const userSettings = getCollection('user_settings');
+    let settings = await userSettings.findOne({ user_id });
 
     // If no settings exist, create default
-    if (!userSettings) {
-      await dbRun(userDb, `
-        INSERT INTO user_settings (user_id, cefr_level)
-        VALUES (?, 'B1')
-      `, [user_id]);
-
-      userSettings = {
+    if (!settings) {
+      const now = new Date();
+      settings = {
         user_id,
         cefr_level: 'B1',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        created_at: now,
+        updated_at: now
       };
+      await userSettings.insertOne(settings);
     }
 
     res.json({
       success: true,
       data: {
-        user_id: userSettings.user_id,
-        cefr_level: userSettings.cefr_level,
-        created_at: userSettings.created_at,
-        updated_at: userSettings.updated_at
+        user_id: settings.user_id,
+        cefr_level: settings.cefr_level,
+        created_at: settings.created_at,
+        updated_at: settings.updated_at
       },
       meta: {
         timestamp: new Date().toISOString()
@@ -84,31 +81,27 @@ router.put('/settings', async (req, res) => {
   }
 
   try {
-    // Check if settings exist
-    const existing = await dbGet(userDb, `
-      SELECT * FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const userSettings = getCollection('user_settings');
+    const now = new Date();
 
-    if (existing) {
-      // Update existing settings
-      await dbRun(userDb, `
-        UPDATE user_settings 
-        SET cefr_level = ?,
-            updated_at = datetime('now')
-        WHERE user_id = ?
-      `, [cefr_level || existing.cefr_level, user_id]);
-    } else {
-      // Create new settings
-      await dbRun(userDb, `
-        INSERT INTO user_settings (user_id, cefr_level)
-        VALUES (?, ?)
-      `, [user_id, cefr_level || 'B1']);
-    }
+    // Upsert settings
+    await userSettings.updateOne(
+      { user_id },
+      {
+        $set: {
+          cefr_level: cefr_level || 'B1',
+          updated_at: now
+        },
+        $setOnInsert: {
+          user_id,
+          created_at: now
+        }
+      },
+      { upsert: true }
+    );
 
     // Return updated settings
-    const updated = await dbGet(userDb, `
-      SELECT * FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const updated = await userSettings.findOne({ user_id });
 
     res.json({
       success: true,
@@ -141,24 +134,57 @@ router.get('/profile', async (req, res) => {
   const user_id = req.user_id;
 
   try {
-    // Get user settings
-    const settings = await dbGet(userDb, `
-      SELECT * FROM user_settings WHERE user_id = ?
-    `, [user_id]);
+    const userSettings = getCollection('user_settings');
+    const wordRecords = getCollection('word_records');
 
-    // Get word statistics
-    const stats = await dbGet(userDb, `
-      SELECT 
-        COUNT(*) as total_words,
-        SUM(CASE WHEN familiarity_score >= 80 THEN 1 ELSE 0 END) as mastered_words,
-        SUM(CASE WHEN familiarity_score >= 40 AND familiarity_score < 80 THEN 1 ELSE 0 END) as learning_words,
-        SUM(CASE WHEN familiarity_score < 40 THEN 1 ELSE 0 END) as difficult_words,
-        SUM(encounter_count) as total_encounters,
-        SUM(known_feedback_count) as total_known_feedback,
-        SUM(unknown_feedback_count) as total_unknown_feedback
-      FROM word_records
-      WHERE user_id = ?
-    `, [user_id]);
+    // Get user settings
+    const settings = await userSettings.findOne({ user_id });
+
+    // Get word statistics using aggregation
+    const statsResult = await wordRecords.aggregate([
+      { $match: { user_id } },
+      {
+        $group: {
+          _id: null,
+          total_words: { $sum: 1 },
+          mastered_words: {
+            $sum: {
+              $cond: [{ $gte: ['$familiarity_score', 80] }, 1, 0]
+            }
+          },
+          learning_words: {
+            $sum: {
+              $cond: [
+                { $and: [
+                  { $gte: ['$familiarity_score', 40] },
+                  { $lt: ['$familiarity_score', 80] }
+                ]},
+                1,
+                0
+              ]
+            }
+          },
+          difficult_words: {
+            $sum: {
+              $cond: [{ $lt: ['$familiarity_score', 40] }, 1, 0]
+            }
+          },
+          total_encounters: { $sum: '$encounter_count' },
+          total_known_feedback: { $sum: '$known_feedback_count' },
+          total_unknown_feedback: { $sum: '$unknown_feedback_count' }
+        }
+      }
+    ]).toArray();
+
+    const stats = statsResult[0] || {
+      total_words: 0,
+      mastered_words: 0,
+      learning_words: 0,
+      difficult_words: 0,
+      total_encounters: 0,
+      total_known_feedback: 0,
+      total_unknown_feedback: 0
+    };
 
     res.json({
       success: true,
@@ -166,13 +192,13 @@ router.get('/profile', async (req, res) => {
         user_id,
         cefr_level: settings?.cefr_level || 'B1',
         statistics: {
-          total_words: stats.total_words || 0,
-          mastered_words: stats.mastered_words || 0,
-          learning_words: stats.learning_words || 0,
-          difficult_words: stats.difficult_words || 0,
-          total_encounters: stats.total_encounters || 0,
-          total_known_feedback: stats.total_known_feedback || 0,
-          total_unknown_feedback: stats.total_unknown_feedback || 0,
+          total_words: stats.total_words,
+          mastered_words: stats.mastered_words,
+          learning_words: stats.learning_words,
+          difficult_words: stats.difficult_words,
+          total_encounters: stats.total_encounters,
+          total_known_feedback: stats.total_known_feedback,
+          total_unknown_feedback: stats.total_unknown_feedback,
           mastery_rate: stats.total_words > 0 
             ? Math.round((stats.mastered_words / stats.total_words) * 100) 
             : 0

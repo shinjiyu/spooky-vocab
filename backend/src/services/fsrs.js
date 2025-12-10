@@ -2,7 +2,7 @@
 // 实现间隔重复算法核心逻辑
 
 const { FSRS, Rating, State, Card } = require('fsrs.js');
-const { userDb, dbAll, dbGet, dbRun } = require('../utils/database');
+const { getCollection } = require('../utils/database');
 const dictionaryService = require('./dictionary');
 
 // FSRS参数配置
@@ -53,10 +53,10 @@ const STATE_REVERSE_MAP = {
 async function initCard(user_id, word, grade = 3) {
   console.log(`[FSRS] Initializing new card: ${word} with grade ${grade}`);
   
+  const wordRecords = getCollection('word_records');
+  
   // 检查卡片是否已存在
-  const existingRecord = await dbGet(userDb, `
-    SELECT * FROM word_records WHERE user_id = ? AND word = ?
-  `, [user_id, word]);
+  const existingRecord = await wordRecords.findOne({ user_id, word });
 
   if (existingRecord && existingRecord.state !== null && existingRecord.state !== 0) {
     console.log(`[FSRS] Card already exists, returning existing: ${word}`);
@@ -65,7 +65,7 @@ async function initCard(user_id, word, grade = 3) {
 
   // 创建新卡片
   const now = new Date();
-  const card = Card.New();
+  const card = new Card();  // 使用 new Card() 而不是 Card.New()
   const rating = GRADE_MAP[grade] || Rating.Good;
   
   // 使用FSRS调度器计算首次复习
@@ -76,8 +76,8 @@ async function initCard(user_id, word, grade = 3) {
     state: STATE_REVERSE_MAP[scheduled_card.card.state],
     stability: scheduled_card.card.stability,
     difficulty: scheduled_card.card.difficulty,
-    due_date: scheduled_card.card.due.toISOString(),
-    last_review: now.toISOString(),
+    due_date: scheduled_card.card.due,
+    last_review: now,
     reps: 1,
     lapses: 0
   };
@@ -86,38 +86,27 @@ async function initCard(user_id, word, grade = 3) {
 
   // 更新或创建数据库记录
   if (existingRecord) {
-    await dbRun(userDb, `
-      UPDATE word_records 
-      SET stability = ?, difficulty = ?, state = ?, due_date = ?,
-          last_review = ?, reps = ?, lapses = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE user_id = ? AND word = ?
-    `, [
-      fsrsData.stability,
-      fsrsData.difficulty,
-      fsrsData.state,
-      fsrsData.due_date,
-      fsrsData.last_review,
-      fsrsData.reps,
-      fsrsData.lapses,
-      user_id,
-      word
-    ]);
+    await wordRecords.updateOne(
+      { user_id, word },
+      {
+        $set: {
+          ...fsrsData,
+          updated_at: now
+        }
+      }
+    );
   } else {
-    await dbRun(userDb, `
-      INSERT INTO word_records 
-      (user_id, word, stability, difficulty, state, due_date, last_review, reps, lapses)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+    await wordRecords.insertOne({
       user_id,
       word,
-      fsrsData.stability,
-      fsrsData.difficulty,
-      fsrsData.state,
-      fsrsData.due_date,
-      fsrsData.last_review,
-      fsrsData.reps,
-      fsrsData.lapses
-    ]);
+      ...fsrsData,
+      familiarity_score: 50,
+      encounter_count: 0,
+      known_feedback_count: 0,
+      unknown_feedback_count: 0,
+      created_at: now,
+      updated_at: now
+    });
   }
 
   // 记录到review_log
@@ -137,10 +126,10 @@ async function initCard(user_id, word, grade = 3) {
 async function reviewCard(user_id, word, grade, duration_seconds = null) {
   console.log(`[FSRS] Reviewing card: ${word} with grade ${grade}`);
 
+  const wordRecords = getCollection('word_records');
+  
   // 获取现有记录
-  const record = await dbGet(userDb, `
-    SELECT * FROM word_records WHERE user_id = ? AND word = ?
-  `, [user_id, word]);
+  const record = await wordRecords.findOne({ user_id, word });
 
   if (!record) {
     throw new Error('Word record not found');
@@ -190,8 +179,8 @@ async function reviewCard(user_id, word, grade, duration_seconds = null) {
     state: STATE_REVERSE_MAP[scheduled_card.card.state],
     stability: scheduled_card.card.stability,
     difficulty: scheduled_card.card.difficulty,
-    due_date: scheduled_card.card.due.toISOString(),
-    last_review: now.toISOString(),
+    due_date: scheduled_card.card.due,
+    last_review: now,
     reps: scheduled_card.card.reps,
     lapses: scheduled_card.card.lapses
   };
@@ -203,22 +192,15 @@ async function reviewCard(user_id, word, grade, duration_seconds = null) {
   });
 
   // 更新数据库
-  await dbRun(userDb, `
-    UPDATE word_records 
-    SET stability = ?, difficulty = ?, state = ?, due_date = ?,
-        last_review = ?, reps = ?, lapses = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE user_id = ? AND word = ?
-  `, [
-    fsrsData.stability,
-    fsrsData.difficulty,
-    fsrsData.state,
-    fsrsData.due_date,
-    fsrsData.last_review,
-    fsrsData.reps,
-    fsrsData.lapses,
-    user_id,
-    word
-  ]);
+  await wordRecords.updateOne(
+    { user_id, word },
+    {
+      $set: {
+        ...fsrsData,
+        updated_at: now
+      }
+    }
+  );
 
   // 记录到review_log
   await logReview(user_id, word, grade, fsrsData, elapsed_days, card.scheduled_days, duration_seconds);
@@ -251,30 +233,33 @@ async function getDueCards(user_id, options = {}) {
 
   console.log(`[FSRS] Getting due cards for user ${user_id}`, options);
 
-  const now = new Date().toISOString();
-  const statesFilter = states.join(',');
+  const wordRecords = getCollection('word_records');
+  const now = new Date();
   
-  let query = `
-    SELECT * FROM word_records
-    WHERE user_id = ?
-      AND state IN (${statesFilter})
-      AND (
-        due_date IS NULL 
-        OR due_date <= ?
-        ${include_new ? 'OR state = 0' : ''}
-      )
-    ORDER BY 
-      CASE 
-        WHEN state = 0 THEN 0
-        WHEN due_date IS NULL THEN 1
-        ELSE 2
-      END,
-      due_date ASC,
-      difficulty DESC
-    LIMIT ? OFFSET ?
-  `;
+  // 构建查询条件
+  const query = {
+    user_id,
+    state: { $in: states },
+    $or: [
+      { due_date: null },
+      { due_date: { $lte: now } }
+    ]
+  };
+  
+  if (include_new) {
+    query.$or.push({ state: 0 });
+  }
 
-  const cards = await dbAll(userDb, query, [user_id, now, limit, offset]);
+  const cards = await wordRecords
+    .find(query)
+    .sort({ 
+      state: 1,  // 新卡片优先
+      due_date: 1, 
+      difficulty: -1 
+    })
+    .skip(offset)
+    .limit(limit)
+    .toArray();
 
   console.log(`[FSRS] Found ${cards.length} due cards`);
 
@@ -295,119 +280,246 @@ async function getDueCards(user_id, options = {}) {
 async function getStats(user_id, period = 'all') {
   console.log(`[FSRS] Getting stats for user ${user_id}, period: ${period}`);
 
+  const wordRecords = getCollection('word_records');
+  const reviewLog = getCollection('review_log');
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
   // 总卡片数和状态分布
-  const overview = await dbGet(userDb, `
-    SELECT 
-      COUNT(*) as total_cards,
-      SUM(CASE WHEN state = 0 THEN 1 ELSE 0 END) as new_cards,
-      SUM(CASE WHEN state = 1 THEN 1 ELSE 0 END) as learning_cards,
-      SUM(CASE WHEN state = 2 THEN 1 ELSE 0 END) as review_cards,
-      SUM(CASE WHEN state = 3 THEN 1 ELSE 0 END) as relearning_cards,
-      SUM(CASE WHEN due_date IS NOT NULL AND due_date <= ? THEN 1 ELSE 0 END) as due_today
-    FROM word_records
-    WHERE user_id = ?
-  `, [now.toISOString(), user_id]);
+  const overviewResult = await wordRecords.aggregate([
+    { $match: { user_id } },
+    {
+      $group: {
+        _id: null,
+        total_cards: { $sum: 1 },
+        new_cards: { $sum: { $cond: [{ $eq: ['$state', 0] }, 1, 0] } },
+        learning_cards: { $sum: { $cond: [{ $eq: ['$state', 1] }, 1, 0] } },
+        review_cards: { $sum: { $cond: [{ $eq: ['$state', 2] }, 1, 0] } },
+        relearning_cards: { $sum: { $cond: [{ $eq: ['$state', 3] }, 1, 0] } },
+        due_today: { 
+          $sum: { 
+            $cond: [
+              { $and: [
+                { $ne: ['$due_date', null] },
+                { $lte: ['$due_date', now] }
+              ]},
+              1,
+              0
+            ]
+          }
+        }
+      }
+    }
+  ]).toArray();
+
+  const overview = overviewResult[0] || {
+    total_cards: 0,
+    new_cards: 0,
+    learning_cards: 0,
+    review_cards: 0,
+    due_today: 0
+  };
 
   // 今日完成数
-  const todayCompleted = await dbGet(userDb, `
-    SELECT COUNT(*) as completed_today
-    FROM review_log
-    WHERE user_id = ? AND review_time >= ?
-  `, [user_id, today]);
+  const todayCompletedResult = await reviewLog.countDocuments({
+    user_id,
+    review_time: { $gte: today }
+  });
 
   // 进度统计
-  const progress = await dbGet(userDb, `
-    SELECT 
-      AVG(CASE WHEN state IN (2, 3) THEN stability ELSE NULL END) as avg_stability,
-      AVG(difficulty) as avg_difficulty,
-      SUM(CASE WHEN stability > 21 THEN 1 ELSE 0 END) as mature_cards,
-      SUM(CASE WHEN stability > 0 AND stability <= 21 THEN 1 ELSE 0 END) as young_cards
-    FROM word_records
-    WHERE user_id = ? AND state > 0
-  `, [user_id]);
+  const progressResult = await wordRecords.aggregate([
+    { $match: { user_id, state: { $gt: 0 } } },
+    {
+      $group: {
+        _id: null,
+        avg_stability: { 
+          $avg: { 
+            $cond: [
+              { $in: ['$state', [2, 3]] },
+              '$stability',
+              null
+            ]
+          }
+        },
+        avg_difficulty: { $avg: '$difficulty' },
+        mature_cards: { $sum: { $cond: [{ $gt: ['$stability', 21] }, 1, 0] } },
+        young_cards: { 
+          $sum: { 
+            $cond: [
+              { $and: [
+                { $gt: ['$stability', 0] },
+                { $lte: ['$stability', 21] }
+              ]},
+              1,
+              0
+            ]
+          }
+        }
+      }
+    }
+  ]).toArray();
+
+  const progress = progressResult[0] || {
+    avg_difficulty: 5,
+    mature_cards: 0,
+    young_cards: 0
+  };
 
   // 预测统计
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowEnd = new Date(tomorrow);
+  tomorrowEnd.setDate(tomorrowEnd.getDate() + 1);
   const next7days = new Date(now);
   next7days.setDate(next7days.getDate() + 7);
   const next30days = new Date(now);
   next30days.setDate(next30days.getDate() + 30);
 
-  const forecast = await dbGet(userDb, `
-    SELECT 
-      SUM(CASE WHEN due_date >= ? AND due_date < ? THEN 1 ELSE 0 END) as due_tomorrow,
-      SUM(CASE WHEN due_date >= ? AND due_date < ? THEN 1 ELSE 0 END) as due_next_7_days,
-      SUM(CASE WHEN due_date >= ? AND due_date < ? THEN 1 ELSE 0 END) as due_next_30_days
-    FROM word_records
-    WHERE user_id = ? AND due_date IS NOT NULL
-  `, [
-    tomorrow.toISOString(), new Date(tomorrow.getTime() + 24*60*60*1000).toISOString(),
-    now.toISOString(), next7days.toISOString(),
-    now.toISOString(), next30days.toISOString(),
-    user_id
-  ]);
+  const forecastResult = await wordRecords.aggregate([
+    { $match: { user_id, due_date: { $ne: null } } },
+    {
+      $group: {
+        _id: null,
+        due_tomorrow: {
+          $sum: {
+            $cond: [
+              { $and: [
+                { $gte: ['$due_date', tomorrow] },
+                { $lt: ['$due_date', tomorrowEnd] }
+              ]},
+              1,
+              0
+            ]
+          }
+        },
+        due_next_7_days: {
+          $sum: {
+            $cond: [
+              { $and: [
+                { $gte: ['$due_date', now] },
+                { $lt: ['$due_date', next7days] }
+              ]},
+              1,
+              0
+            ]
+          }
+        },
+        due_next_30_days: {
+          $sum: {
+            $cond: [
+              { $and: [
+                { $gte: ['$due_date', now] },
+                { $lt: ['$due_date', next30days] }
+              ]},
+              1,
+              0
+            ]
+          }
+        }
+      }
+    }
+  ]).toArray();
+
+  const forecast = forecastResult[0] || {
+    due_tomorrow: 0,
+    due_next_7_days: 0,
+    due_next_30_days: 0
+  };
 
   // 活动统计
-  const activity = await dbGet(userDb, `
-    SELECT 
-      COUNT(CASE WHEN review_time >= ? THEN 1 END) as reviews_today,
-      COUNT(CASE WHEN review_time >= datetime('now', '-7 days') THEN 1 END) as reviews_this_week,
-      COUNT(CASE WHEN review_time >= datetime('now', '-30 days') THEN 1 END) as reviews_this_month,
-      AVG(review_duration_seconds) as avg_review_time
-    FROM review_log
-    WHERE user_id = ?
-  `, [today, user_id]);
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const activityResult = await reviewLog.aggregate([
+    { $match: { user_id } },
+    {
+      $group: {
+        _id: null,
+        reviews_today: {
+          $sum: { $cond: [{ $gte: ['$review_time', today] }, 1, 0] }
+        },
+        reviews_this_week: {
+          $sum: { $cond: [{ $gte: ['$review_time', sevenDaysAgo] }, 1, 0] }
+        },
+        reviews_this_month: {
+          $sum: { $cond: [{ $gte: ['$review_time', thirtyDaysAgo] }, 1, 0] }
+        },
+        avg_review_time: { $avg: '$review_duration_seconds' }
+      }
+    }
+  ]).toArray();
+
+  const activity = activityResult[0] || {
+    reviews_today: 0,
+    reviews_this_week: 0,
+    reviews_this_month: 0,
+    avg_review_time: 0
+  };
 
   // 计算学习连续天数
   const streak = await calculateStudyStreak(user_id);
 
   // 时间统计
-  const timeStats = await dbGet(userDb, `
-    SELECT 
-      SUM(CASE WHEN review_time >= ? THEN review_duration_seconds ELSE 0 END) / 60.0 as total_time_today_minutes,
-      SUM(review_duration_seconds) / 60.0 as total_time_all_minutes
-    FROM review_log
-    WHERE user_id = ? AND review_duration_seconds IS NOT NULL
-  `, [today, user_id]);
+  const timeStatsResult = await reviewLog.aggregate([
+    { $match: { user_id, review_duration_seconds: { $ne: null } } },
+    {
+      $group: {
+        _id: null,
+        total_time_today_minutes: {
+          $sum: {
+            $cond: [
+              { $gte: ['$review_time', today] },
+              { $divide: ['$review_duration_seconds', 60] },
+              0
+            ]
+          }
+        },
+        total_time_all_minutes: {
+          $sum: { $divide: ['$review_duration_seconds', 60] }
+        }
+      }
+    }
+  ]).toArray();
+
+  const timeStats = timeStatsResult[0] || {
+    total_time_today_minutes: 0,
+    total_time_all_minutes: 0
+  };
 
   // 计算保留率
   const retention = await calculateRetentionRate(user_id);
 
   return {
     overview: {
-      total_cards: overview.total_cards || 0,
-      new_cards: overview.new_cards || 0,
-      learning_cards: overview.learning_cards || 0,
-      review_cards: overview.review_cards || 0,
-      due_today: overview.due_today || 0,
-      completed_today: todayCompleted.completed_today || 0
+      total_cards: overview.total_cards,
+      new_cards: overview.new_cards,
+      learning_cards: overview.learning_cards,
+      review_cards: overview.review_cards,
+      due_today: overview.due_today,
+      completed_today: todayCompletedResult
     },
     progress: {
       retention_rate: retention,
       average_ease: progress.avg_difficulty ? 10 - progress.avg_difficulty : 5, // 转换为易度
-      mature_cards: progress.mature_cards || 0,
-      young_cards: progress.young_cards || 0
+      mature_cards: progress.mature_cards,
+      young_cards: progress.young_cards
     },
     forecast: {
-      due_tomorrow: forecast.due_tomorrow || 0,
-      due_next_7_days: forecast.due_next_7_days || 0,
-      due_next_30_days: forecast.due_next_30_days || 0
+      due_tomorrow: forecast.due_tomorrow,
+      due_next_7_days: forecast.due_next_7_days,
+      due_next_30_days: forecast.due_next_30_days
     },
     activity: {
-      reviews_today: activity.reviews_today || 0,
-      reviews_this_week: activity.reviews_this_week || 0,
-      reviews_this_month: activity.reviews_this_month || 0,
+      reviews_today: activity.reviews_today,
+      reviews_this_week: activity.reviews_this_week,
+      reviews_this_month: activity.reviews_this_month,
       study_streak_days: streak.current_streak,
       total_study_days: streak.total_days
     },
     time_stats: {
       average_review_time_seconds: activity.avg_review_time || 0,
-      total_time_today_minutes: timeStats.total_time_today_minutes || 0,
-      total_time_all_minutes: timeStats.total_time_all_minutes || 0
+      total_time_today_minutes: timeStats.total_time_today_minutes,
+      total_time_all_minutes: timeStats.total_time_all_minutes
     }
   };
 }
@@ -422,31 +534,46 @@ async function getStats(user_id, period = 'all') {
 async function resetCard(user_id, word, reset_type = 'full') {
   console.log(`[FSRS] Resetting card: ${word}, type: ${reset_type}`);
 
-  const record = await dbGet(userDb, `
-    SELECT * FROM word_records WHERE user_id = ? AND word = ?
-  `, [user_id, word]);
+  const wordRecords = getCollection('word_records');
+  const record = await wordRecords.findOne({ user_id, word });
 
   if (!record) {
     throw new Error('Word record not found');
   }
 
+  const now = new Date();
+
   if (reset_type === 'full') {
     // 完全重置
-    await dbRun(userDb, `
-      UPDATE word_records 
-      SET state = 0, stability = 0, difficulty = 5.0, 
-          due_date = NULL, last_review = NULL, reps = 0, lapses = 0,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE user_id = ? AND word = ?
-    `, [user_id, word]);
+    await wordRecords.updateOne(
+      { user_id, word },
+      {
+        $set: {
+          state: 0,
+          stability: 0,
+          difficulty: 5.0,
+          due_date: null,
+          last_review: null,
+          reps: 0,
+          lapses: 0,
+          updated_at: now
+        }
+      }
+    );
   } else {
     // 保留统计，只重置FSRS参数
-    await dbRun(userDb, `
-      UPDATE word_records 
-      SET state = 0, stability = 0, due_date = NULL, last_review = NULL,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE user_id = ? AND word = ?
-    `, [user_id, word]);
+    await wordRecords.updateOne(
+      { user_id, word },
+      {
+        $set: {
+          state: 0,
+          stability: 0,
+          due_date: null,
+          last_review: null,
+          updated_at: now
+        }
+      }
+    );
   }
 
   return {
@@ -463,16 +590,16 @@ async function resetCard(user_id, word, reset_type = 'full') {
  * 丰富卡片数据（添加翻译、音标等）
  */
 async function enrichCardData(record, user_id) {
+  const wordContexts = getCollection('word_contexts');
   const dictEntry = await dictionaryService.lookup(record.word);
   
   // 获取例句上下文
-  const contexts = await dbAll(userDb, `
-    SELECT id, sentence, url, created_at
-    FROM word_contexts
-    WHERE user_id = ? AND word = ?
-    ORDER BY created_at DESC
-    LIMIT 3
-  `, [user_id, record.word]);
+  const contexts = await wordContexts
+    .find({ user_id, word: record.word })
+    .sort({ created_at: -1 })
+    .limit(3)
+    .project({ id: 1, sentence: 1, url: 1, created_at: 1 })
+    .toArray();
 
   const elapsed_days = record.last_review 
     ? (Date.now() - new Date(record.last_review)) / (1000 * 60 * 60 * 24)
@@ -495,7 +622,7 @@ async function enrichCardData(record, user_id) {
       elapsed_days: Math.round(elapsed_days * 10) / 10
     },
     contexts: contexts.map(c => ({
-      id: c.id,
+      id: c._id,
       sentence: c.sentence,
       url: c.url,
       created_at: c.created_at
@@ -509,22 +636,20 @@ async function enrichCardData(record, user_id) {
  */
 async function logReview(user_id, word, grade, fsrsData, elapsed_days, scheduled_days, duration_seconds = null) {
   try {
-    await dbRun(userDb, `
-      INSERT INTO review_log 
-      (user_id, word, grade, state, stability, difficulty, elapsed_days, scheduled_days, review_duration_seconds, last_elapsed_days)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
+    const reviewLog = getCollection('review_log');
+    await reviewLog.insertOne({
       user_id,
       word,
       grade,
-      fsrsData.state,
-      fsrsData.stability,
-      fsrsData.difficulty,
+      state: fsrsData.state,
+      stability: fsrsData.stability,
+      difficulty: fsrsData.difficulty,
       elapsed_days,
       scheduled_days,
-      duration_seconds,
-      elapsed_days
-    ]);
+      review_duration_seconds: duration_seconds,
+      last_elapsed_days: elapsed_days,
+      review_time: new Date()
+    });
   } catch (error) {
     console.error('[FSRS] Failed to log review:', error);
   }
@@ -545,12 +670,20 @@ function calculateIntervalDays(due_date) {
  * 计算学习连续天数
  */
 async function calculateStudyStreak(user_id) {
-  const reviews = await dbAll(userDb, `
-    SELECT DISTINCT DATE(review_time) as review_date
-    FROM review_log
-    WHERE user_id = ?
-    ORDER BY review_date DESC
-  `, [user_id]);
+  const reviewLog = getCollection('review_log');
+  
+  // 获取所有复习日期（去重）
+  const reviews = await reviewLog.aggregate([
+    { $match: { user_id } },
+    {
+      $group: {
+        _id: {
+          $dateToString: { format: '%Y-%m-%d', date: '$review_time' }
+        }
+      }
+    },
+    { $sort: { _id: -1 } }
+  ]).toArray();
 
   if (reviews.length === 0) {
     return { current_streak: 0, total_days: 0 };
@@ -561,7 +694,7 @@ async function calculateStudyStreak(user_id) {
   today.setHours(0, 0, 0, 0);
 
   for (let i = 0; i < reviews.length; i++) {
-    const reviewDate = new Date(reviews[i].review_date);
+    const reviewDate = new Date(reviews[i]._id);
     reviewDate.setHours(0, 0, 0, 0);
     
     const expectedDate = new Date(today);
@@ -584,19 +717,25 @@ async function calculateStudyStreak(user_id) {
  * 计算保留率
  */
 async function calculateRetentionRate(user_id) {
-  const result = await dbGet(userDb, `
-    SELECT 
-      COUNT(*) as total,
-      SUM(CASE WHEN grade >= 3 THEN 1 ELSE 0 END) as success
-    FROM review_log
-    WHERE user_id = ? AND review_time >= datetime('now', '-30 days')
-  `, [user_id]);
+  const reviewLog = getCollection('review_log');
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  if (!result || result.total === 0) {
+  const result = await reviewLog.aggregate([
+    { $match: { user_id, review_time: { $gte: thirtyDaysAgo } } },
+    {
+      $group: {
+        _id: null,
+        total: { $sum: 1 },
+        success: { $sum: { $cond: [{ $gte: ['$grade', 3] }, 1, 0] } }
+      }
+    }
+  ]).toArray();
+
+  if (!result || result.length === 0 || result[0].total === 0) {
     return 90; // 默认90%
   }
 
-  return Math.round((result.success / result.total) * 100 * 10) / 10;
+  return Math.round((result[0].success / result[0].total) * 100 * 10) / 10;
 }
 
 /**
@@ -624,4 +763,3 @@ module.exports = {
   GRADE_MAP,
   STATE_MAP
 };
-

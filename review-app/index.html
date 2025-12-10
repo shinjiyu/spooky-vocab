@@ -182,8 +182,10 @@
     }
 
     .phonetic-text {
-      font-size: 20px;
-      opacity: 0.9;
+      font-size: 22px;
+      color: #667eea;
+      font-family: 'Lucida Sans Unicode', 'Times New Roman', serif;
+      margin-top: 10px;
     }
 
     .translation-text {
@@ -314,7 +316,7 @@
         </div>
         <div class="form-group">
           <label>API地址</label>
-          <input type="text" id="apiUrl" placeholder="API地址" value="http://localhost:3000">
+          <input type="text" id="apiUrl" placeholder="API地址" value="https://kuroneko.chat/vocab-api">
         </div>
         <button class="btn btn-primary" onclick="app.login()">登录</button>
         <div id="loginMessage"></div>
@@ -346,6 +348,7 @@
         </div>
         <button class="btn btn-primary" onclick="app.startReview()">开始复习</button>
         <button class="btn btn-secondary" onclick="app.loadStats()">刷新统计</button>
+        <button class="btn btn-secondary" onclick="app.refreshWords()" style="margin-top: 10px;">🔄 刷新单词列表</button>
       </div>
 
       <!-- 复习卡片 -->
@@ -478,13 +481,29 @@
         }
       },
 
+      // 刷新单词列表
+      async refreshWords() {
+        try {
+          const response = await this.apiRequest('/api/sr/due?limit=20');
+          if (response.success) {
+            this.cards = response.data.cards;
+            this.currentIndex = 0;
+            alert(`✅ 已刷新！共 ${this.cards.length} 个待复习单词`);
+          }
+        } catch (error) {
+          alert('刷新失败：' + error.message);
+        }
+      },
+
       // 显示卡片
       showCard(card) {
         this.currentCard = card;
         this.reviewStartTime = Date.now();
         
         document.getElementById('wordText').textContent = card.word;
-        document.getElementById('phoneticText').textContent = card.phonetic || '';
+        // 格式化音标显示：加方括号
+        const phonetic = card.phonetic ? `/${card.phonetic}/` : '';
+        document.getElementById('phoneticText').textContent = phonetic;
         document.getElementById('translationText').textContent = card.translation;
         
         // 显示例句

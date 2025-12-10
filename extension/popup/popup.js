@@ -517,18 +517,38 @@
       });
     });
 
-    clearHistoryBtn.addEventListener('click', () => {
-      if (!confirm('确定要清除所有历史记录吗？')) {
+    clearHistoryBtn.addEventListener('click', async () => {
+      if (!confirm('确定要清除所有学习记录吗？\n\n这将清除：\n• 本次会话统计\n• 服务器上的词汇记录\n• 复习进度')) {
         return;
       }
       
-      chrome.storage.local.set({
-        knownWords: [],
-        encounterHistory: []
-      }, () => {
-        loadStats();
-        loadKnownWords();
-      });
+      clearHistoryBtn.disabled = true;
+      clearHistoryBtn.textContent = '清除中...';
+      
+      try {
+        // 清除服务器数据
+        if (useAPI && currentToken) {
+          await apiRequest('DELETE', '/api/review/reset?confirm=true');
+          console.log('[Popup] Server data cleared');
+        }
+        
+        // 清除本地数据
+        chrome.storage.local.set({
+          knownWords: [],
+          encounterHistory: [],
+          syncQueue: []
+        }, () => {
+          loadStats();
+          loadKnownWords();
+          clearHistoryBtn.disabled = false;
+          clearHistoryBtn.textContent = '清除历史记录';
+        });
+      } catch (error) {
+        console.error('[Popup] Failed to clear history:', error);
+        alert('清除失败: ' + error.message);
+        clearHistoryBtn.disabled = false;
+        clearHistoryBtn.textContent = '清除历史记录';
+      }
     });
 
     // 设置视图
