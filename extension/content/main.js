@@ -279,6 +279,14 @@
       sendResponse({ success: true });
     }
     
+    // 清除已记录的词汇（清除历史时）
+    if (request.action === 'clearRecordedWords') {
+      if (window.textProcessor) {
+        window.textProcessor.clearRecordedWords();
+      }
+      sendResponse({ success: true });
+    }
+    
     return true; // 保持消息通道开启
   });
 

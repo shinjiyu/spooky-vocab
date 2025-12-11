@@ -19,6 +19,7 @@ router.get('/words', async (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const offset = parseInt(req.query.offset) || 0;
   const sort = req.query.sort || 'priority'; // priority, recent, score
+  const knownOnly = req.query.known_only === 'true';
 
   try {
     const wordRecords = getCollection('word_records');
@@ -26,22 +27,27 @@ router.get('/words', async (req, res) => {
     // Build sort object
     const sortObj = buildSort(sort);
 
-    // Get words with low-medium familiarity scores (need review)
+    // Build query
+    const query = { user_id };
+    
+    if (knownOnly) {
+      // 只返回用户标记为"已知"的词（点击✓按钮）
+      query.known_feedback_count = { $gt: 0 };
+    } else {
+      // 返回需要复习的词（低熟悉度）
+      query.familiarity_score = { $lt: 80 };
+    }
+
+    // Get words
     const words = await wordRecords
-      .find({
-        user_id,
-        familiarity_score: { $lt: 80 }
-      })
+      .find(query)
       .sort(sortObj)
       .skip(offset)
       .limit(limit)
       .toArray();
 
     // Get total count
-    const total = await wordRecords.countDocuments({
-      user_id,
-      familiarity_score: { $lt: 80 }
-    });
+    const total = await wordRecords.countDocuments(query);
 
     // Format response
     const formattedWords = words.map(record => ({

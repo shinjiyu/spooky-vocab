@@ -45,7 +45,7 @@
     async markAsUnknown(word, context = null) {
       const lowerWord = word.toLowerCase();
       
-      this.log(`Marking as unknown: ${lowerWord}`);
+      console.log(`[FeedbackHandler] 🔄 markAsUnknown called: ${lowerWord}`);
       
       // 立即更新本地计数
       this.unknownCount++;
@@ -54,15 +54,16 @@
       // 调用API（纯API模式）
       try {
         if (window.VOCAB_HELPER_CONFIG.API_READY) {
+          console.log(`[FeedbackHandler] 📡 Sending to API: /api/feedback/unknown - word: ${lowerWord}`);
           await window.apiClient.markWordUnknown(lowerWord, context);
-          this.log(`✓ API: Marked as unknown: ${lowerWord}`);
+          console.log(`[FeedbackHandler] ✅ API success: ${lowerWord}`);
           this.notifyPopupRefresh(); // 通知Popup刷新
         } else {
-          this.log(`⚠ API not ready, queuing feedback: ${lowerWord}`);
+          console.log(`[FeedbackHandler] ⚠️ API not ready, queuing: ${lowerWord}`);
           this.queueSync('unknown', lowerWord, context);
         }
       } catch (error) {
-        console.error(`[FeedbackHandler] ✗ Failed to mark as unknown: ${lowerWord}`, error);
+        console.error(`[FeedbackHandler] ❌ API failed for: ${lowerWord}`, error);
         
         // API失败，加入同步队列稍后重试
         this.queueSync('unknown', lowerWord, context);

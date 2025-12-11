@@ -248,12 +248,15 @@
      * 标记单词为未知（请求翻译）
      */
     async markWordUnknown(word, context = null, url = null) {
-      return this.post('/api/feedback/unknown', {
+      console.log(`[APIClient] 🌐 POST /api/feedback/unknown - word: ${word}`);
+      const result = await this.post('/api/feedback/unknown', {
         word,
         context,
         url: url || window.location.href,
         timestamp: new Date().toISOString()
       });
+      console.log(`[APIClient] 📥 Response:`, result);
+      return result;
     }
 
     /**

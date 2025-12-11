@@ -272,12 +272,15 @@
 
   async function loadKnownWords() {
     try {
-      // 尝试从API获取
+      // 尝试从API获取 - 只获取标记为"已知"的词（known_feedback_count > 0）
       if (useAPI && currentToken) {
-        const data = await apiRequest('GET', '/api/review/words?limit=10&sort=recent');
+        const data = await apiRequest('GET', '/api/review/words?limit=10&sort=recent&known_only=true');
         
         if (data && data.words && data.words.length > 0) {
           renderWordList(data.words);
+          return;
+        } else {
+          knownWordsList.innerHTML = '<div class="empty-state">暂无已掌握的词汇</div>';
           return;
         }
       }
@@ -543,6 +546,15 @@
           clearHistoryBtn.disabled = false;
           clearHistoryBtn.textContent = '清除历史记录';
         });
+        
+        // 通知内容脚本清除已记录的词汇
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, { action: 'clearRecordedWords' });
+            console.log('[Popup] Notified content script to clear recorded words');
+          }
+        });
+        
       } catch (error) {
         console.error('[Popup] Failed to clear history:', error);
         alert('清除失败: ' + error.message);

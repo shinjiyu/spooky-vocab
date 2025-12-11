@@ -15,6 +15,9 @@
       this.vocabularyCache = new Map();
       this.cacheExpiry = window.CONFIG ? window.CONFIG.performance.cacheExpiry : 3600000; // 1小时
       
+      // 已记录的词汇（避免重复入库）
+      this.recordedWords = new Set();
+      
       // 不需要处理的标签
       this.excludedTags = new Set([
         'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
@@ -296,6 +299,9 @@
     async handleMouseEnter(e, span) {
       const word = span.dataset.word;
       const needsTranslation = span.classList.contains('vocab-needs-translation');
+      const alreadyRecorded = this.recordedWords.has(word);
+      
+      console.log(`[Hover] word: ${word}, needsTranslation: ${needsTranslation}, recorded: ${alreadyRecorded}`);
       
       if (needsTranslation && window.translationTooltip) {
         const translation = await this.getTranslation(word);
@@ -303,9 +309,13 @@
           window.translationTooltip.show(span, word, translation);
           
           // 记录遇到新词（入库）- 只在第一次时入库
-          if (window.feedbackHandler && !span.dataset.recorded) {
-            span.dataset.recorded = 'true';
+          if (window.feedbackHandler && !alreadyRecorded) {
+            console.log(`[Hover] 📝 Recording new word: ${word}`);
+            this.recordedWords.add(word);
             await window.feedbackHandler.markAsUnknown(word);
+            console.log(`[Hover] ✅ Word recorded: ${word}`);
+          } else {
+            console.log(`[Hover] ⏭ Already recorded: ${word}`);
           }
         }
       }
@@ -340,8 +350,8 @@
       }
       
       // 记录用户主动请求翻译 - 只在第一次时入库
-      if (window.feedbackHandler && !span.dataset.recorded) {
-        span.dataset.recorded = 'true';
+      if (window.feedbackHandler && !this.recordedWords.has(word)) {
+        this.recordedWords.add(word);
         await window.feedbackHandler.markAsUnknown(word);
       }
     }
@@ -374,8 +384,8 @@
       }
       
       // 记录遇到新词 - 只在第一次时入库
-      if (window.feedbackHandler && !span.dataset.recorded) {
-        span.dataset.recorded = 'true';
+      if (window.feedbackHandler && !this.recordedWords.has(word)) {
+        this.recordedWords.add(word);
         await window.feedbackHandler.markAsUnknown(word);
       }
     }
@@ -424,8 +434,8 @@
       }
       
       // 记录遇到新词 - 只在第一次时入库
-      if (window.feedbackHandler && !span.dataset.recorded) {
-        span.dataset.recorded = 'true';
+      if (window.feedbackHandler && !this.recordedWords.has(word)) {
+        this.recordedWords.add(word);
         await window.feedbackHandler.markAsUnknown(word);
       }
     }
@@ -511,6 +521,12 @@
       });
       
       this.log('Cleaned up all word markers');
+    }
+
+    // 清除已记录的词汇（清除历史时调用）
+    clearRecordedWords() {
+      console.log(`[TextProcessor] 🧹 Clearing recorded words (was: ${this.recordedWords.size})`);
+      this.recordedWords.clear();
     }
 
     log(...args) {
