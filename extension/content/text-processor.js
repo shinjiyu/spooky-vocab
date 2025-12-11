@@ -301,6 +301,12 @@
         const translation = await this.getTranslation(word);
         if (translation) {
           window.translationTooltip.show(span, word, translation);
+          
+          // 记录遇到新词（入库）- 只在第一次时入库
+          if (window.feedbackHandler && !span.dataset.recorded) {
+            span.dataset.recorded = 'true';
+            await window.feedbackHandler.markAsUnknown(word);
+          }
         }
       }
     }
@@ -333,8 +339,9 @@
         window.translationTooltip.show(span, word, translation, true);
       }
       
-      // 记录用户主动请求翻译
-      if (window.feedbackHandler) {
+      // 记录用户主动请求翻译 - 只在第一次时入库
+      if (window.feedbackHandler && !span.dataset.recorded) {
+        span.dataset.recorded = 'true';
         await window.feedbackHandler.markAsUnknown(word);
       }
     }
@@ -364,6 +371,12 @@
       
       if (window.translationTooltip) {
         window.translationTooltip.toggle(span, word, translation);
+      }
+      
+      // 记录遇到新词 - 只在第一次时入库
+      if (window.feedbackHandler && !span.dataset.recorded) {
+        span.dataset.recorded = 'true';
+        await window.feedbackHandler.markAsUnknown(word);
       }
     }
 
@@ -410,8 +423,9 @@
         window.translationTooltip.show(span, word, translation, true);
       }
       
-      // 记录用户主动请求翻译
-      if (window.feedbackHandler) {
+      // 记录遇到新词 - 只在第一次时入库
+      if (window.feedbackHandler && !span.dataset.recorded) {
+        span.dataset.recorded = 'true';
         await window.feedbackHandler.markAsUnknown(word);
       }
     }
@@ -421,6 +435,7 @@
       // 先检查缓存
       const cached = this.vocabularyCache.get(word);
       
+      // 如果不强制API且缓存有数据，直接返回
       if (cached && cached.translation && !forceAPI) {
         return cached.translation;
       }
@@ -449,10 +464,21 @@
       } catch (error) {
         console.error(`[TextProcessor] Failed to get translation for ${word}:`, error);
         
-        // API失败，降级到Mock
+        // API失败，降级到缓存
+        if (cached && cached.translation) {
+          this.log(`Fallback to cached translation for ${word}`);
+          return cached.translation;
+        }
+        
+        // 再降级到Mock
         if (window.mockVocabulary) {
           return window.mockVocabulary.getTranslation(word);
         }
+      }
+
+      // 最后再检查一次缓存（可能之前没检查到）
+      if (cached && cached.translation) {
+        return cached.translation;
       }
 
       return null;
