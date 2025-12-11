@@ -325,6 +325,19 @@
 
     <!-- 主视图 -->
     <div class="main-view" id="mainView">
+      <!-- 用户信息栏 -->
+      <div class="card" style="padding: 15px 20px; margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 20px;">👤</span>
+            <span style="color: #333; font-weight: 500;" id="currentUserDisplay">-</span>
+          </div>
+          <button onclick="app.logout()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;">
+            退出登录
+          </button>
+        </div>
+      </div>
+
       <!-- 统计卡片 -->
       <div class="card">
         <h3 style="margin-bottom: 20px; color: #333;">学习统计</h3>
@@ -396,6 +409,40 @@
       currentIndex: 0,
       reviewStartTime: null,
 
+      // 初始化 - 检查是否已登录
+      init() {
+        const savedToken = localStorage.getItem('token');
+        const savedApiUrl = localStorage.getItem('apiUrl');
+        const savedUserId = localStorage.getItem('userId');
+        
+        if (savedToken && savedApiUrl && savedUserId) {
+          this.token = savedToken;
+          this.apiUrl = savedApiUrl;
+          
+          // 自动登录
+          document.getElementById('loginView').classList.remove('active');
+          document.getElementById('mainView').classList.add('active');
+          document.getElementById('currentUserDisplay').textContent = savedUserId;
+          this.loadStats();
+        }
+      },
+
+      // 退出登录
+      logout() {
+        if (!confirm('确定要退出登录吗？')) return;
+        
+        localStorage.removeItem('token');
+        localStorage.removeItem('apiUrl');
+        localStorage.removeItem('userId');
+        
+        this.token = '';
+        this.apiUrl = '';
+        
+        document.getElementById('mainView').classList.remove('active');
+        document.getElementById('loginView').classList.add('active');
+        document.getElementById('currentUserDisplay').textContent = '-';
+      },
+
       // 登录
       async login() {
         const userId = document.getElementById('userId').value.trim();
@@ -431,6 +478,7 @@
             setTimeout(() => {
               document.getElementById('loginView').classList.remove('active');
               document.getElementById('mainView').classList.add('active');
+              document.getElementById('currentUserDisplay').textContent = userId;
               this.loadStats();
             }, 500);
           } else {
@@ -598,21 +646,6 @@
       getStateName(state) {
         const names = ['新卡片', '学习中', '复习中', '重新学习'];
         return names[state] || '未知';
-      },
-
-      // 初始化
-      init() {
-        // 尝试从localStorage恢复登录状态
-        const savedToken = localStorage.getItem('token');
-        const savedApiUrl = localStorage.getItem('apiUrl');
-        
-        if (savedToken && savedApiUrl) {
-          this.token = savedToken;
-          this.apiUrl = savedApiUrl;
-          document.getElementById('loginView').classList.remove('active');
-          document.getElementById('mainView').classList.add('active');
-          this.loadStats();
-        }
       }
     };
 
