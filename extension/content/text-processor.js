@@ -331,12 +331,14 @@
     // 桌面端：双击强制显示翻译
     async handleDoubleClick(e, span) {
       e.preventDefault();
+      e.stopPropagation();
       const word = span.dataset.word;
       
-      this.log(`Double-click on word: ${word}`);
+      console.log(`[DoubleClick] 🖱️ word: ${word}`);
       
-      // 获取翻译
+      // 获取翻译（强制从API获取）
       let translation = await this.getTranslation(word, true);
+      console.log(`[DoubleClick] Translation result:`, translation);
       
       if (!translation) {
         translation = {
@@ -346,6 +348,7 @@
       }
       
       if (window.translationTooltip) {
+        console.log(`[DoubleClick] Showing tooltip for: ${word}`);
         window.translationTooltip.show(span, word, translation, true);
       }
       

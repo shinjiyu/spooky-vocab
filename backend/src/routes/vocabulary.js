@@ -62,19 +62,52 @@ function simpleWordJudgment(word, userLevel, userRecord) {
     return { needs_translation: false, score: 80 };
   }
   
-  // 极常见的100个词（不分等级都认识）
+  // 极常见词（不需要翻译）- 包括助动词、介词、连词、代词、基础动词等
   const veryCommonWords = new Set([
-    'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
-    'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at',
-    'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she',
-    'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their', 'what',
-    'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go', 'me',
-    'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know', 'take',
-    'people', 'into', 'year', 'your', 'good', 'some', 'could', 'them', 'see', 'other',
-    'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over', 'think', 'also',
-    'back', 'after', 'use', 'two', 'how', 'our', 'work', 'first', 'well', 'way',
-    'even', 'new', 'want', 'because', 'any', 'these', 'give', 'day', 'most', 'us',
-    'is', 'was', 'are', 'been', 'has', 'had', 'were', 'said', 'did', 'having'
+    // be动词及其变形
+    'be', 'is', 'am', 'are', 'was', 'were', 'been', 'being',
+    // 助动词/情态动词
+    'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'done',
+    'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must',
+    // 代词
+    'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+    'my', 'your', 'his', 'her', 'its', 'our', 'their', 'mine', 'yours', 'hers', 'ours', 'theirs',
+    'this', 'that', 'these', 'those', 'who', 'whom', 'whose', 'which', 'what',
+    'myself', 'yourself', 'himself', 'herself', 'itself', 'ourselves', 'themselves',
+    // 冠词
+    'a', 'an', 'the',
+    // 介词
+    'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'up', 'down',
+    'into', 'out', 'over', 'under', 'about', 'through', 'between', 'after', 'before',
+    'above', 'below', 'during', 'without', 'within', 'along', 'around', 'behind',
+    'beside', 'beyond', 'near', 'off', 'since', 'until', 'upon', 'against', 'among',
+    // 连词
+    'and', 'or', 'but', 'so', 'if', 'when', 'while', 'because', 'although', 'though',
+    'as', 'than', 'that', 'whether', 'unless', 'since', 'where', 'after', 'before',
+    // 副词
+    'not', 'no', 'yes', 'very', 'too', 'also', 'just', 'only', 'still', 'even',
+    'now', 'then', 'here', 'there', 'how', 'why', 'when', 'where', 'well', 'much',
+    'more', 'most', 'less', 'least', 'never', 'always', 'often', 'sometimes', 'again',
+    'already', 'soon', 'today', 'tomorrow', 'yesterday', 'really', 'quite', 'rather',
+    // 基础动词
+    'go', 'get', 'make', 'know', 'take', 'see', 'come', 'think', 'look', 'want',
+    'give', 'use', 'find', 'tell', 'ask', 'work', 'seem', 'feel', 'try', 'leave',
+    'call', 'need', 'become', 'keep', 'let', 'begin', 'show', 'hear', 'play', 'run',
+    'move', 'live', 'believe', 'hold', 'bring', 'happen', 'write', 'provide', 'sit', 'stand',
+    'say', 'said', 'put', 'set', 'read', 'meet', 'pay', 'buy', 'lead', 'understand',
+    // 基础名词
+    'time', 'year', 'people', 'way', 'day', 'man', 'woman', 'child', 'world', 'life',
+    'hand', 'part', 'place', 'case', 'week', 'thing', 'home', 'water', 'room', 'side',
+    // 基础形容词
+    'good', 'new', 'first', 'last', 'long', 'great', 'little', 'own', 'other', 'old',
+    'right', 'big', 'high', 'small', 'large', 'next', 'young', 'important', 'few', 'same',
+    'able', 'different', 'early', 'possible', 'bad', 'best', 'better', 'sure', 'free', 'true',
+    // 数词
+    'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+    'hundred', 'thousand', 'million', 'billion', 'first', 'second', 'third',
+    // 其他常用词
+    'all', 'any', 'some', 'many', 'each', 'every', 'both', 'few', 'more', 'most',
+    'another', 'such', 'none', 'own', 'same', 'else', 'enough', 'several'
   ]);
   
   if (veryCommonWords.has(lowerWord)) {
