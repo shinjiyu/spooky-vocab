@@ -46,7 +46,11 @@ window.CONFIG = {
 const DEFAULT_CONFIG = {
   API_BASE_URL: window.CONFIG.api.baseURL,
   DEBUG_MODE: window.CONFIG.features.debugMode,
-  API_READY: false
+  API_READY: false,
+  apiReady: false,
+  useAPI: true,
+  enabled: true,
+  isMobile: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768
 };
 
 // 从chrome.storage.local加载配置

@@ -4,11 +4,15 @@
 (function() {
   'use strict';
 
+  console.log('[VocabHelper] 🚀 main.js loaded');
+
   // 设备检测
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
   
-  // 全局配置
+  // 全局配置 - 合并已有配置
+  const existingConfig = window.VOCAB_HELPER_CONFIG || {};
   window.VOCAB_HELPER_CONFIG = {
+    ...existingConfig,  // 保留已有配置
     isMobile: isMobile,
     enabled: true,
     DEBUG_MODE: window.CONFIG?.features?.debugMode || false,
@@ -16,6 +20,8 @@
     apiReady: false,  // API是否就绪
     API_READY: false  // 兼容旧代码
   };
+  
+  console.log('[VocabHelper] Config initialized:', window.VOCAB_HELPER_CONFIG);
 
   // 调试日志
   function log(...args) {
