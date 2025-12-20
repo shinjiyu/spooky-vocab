@@ -413,20 +413,27 @@
 
     // 获取单词翻译（从缓存或API）
     async getTranslation(word, forceAPI = false) {
+      console.log(`[getTranslation] 🔍 word: ${word}, forceAPI: ${forceAPI}`);
+      console.log(`[getTranslation] Config: useAPI=${window.VOCAB_HELPER_CONFIG.useAPI}, apiReady=${window.VOCAB_HELPER_CONFIG.apiReady}, API_READY=${window.VOCAB_HELPER_CONFIG.API_READY}`);
+      
       // 先检查缓存
       const cached = this.vocabularyCache.get(word);
       
       // 如果不强制API且缓存有数据，直接返回
       if (cached && cached.translation && !forceAPI) {
+        console.log(`[getTranslation] ✅ Returning cached translation for: ${word}`);
         return cached.translation;
       }
 
       this.log(`Getting translation for: ${word}`);
 
       try {
-        if (window.VOCAB_HELPER_CONFIG.useAPI && window.VOCAB_HELPER_CONFIG.apiReady) {
+        // 使用 API_READY 作为主要判断（与其他地方一致）
+        if (window.VOCAB_HELPER_CONFIG.useAPI && (window.VOCAB_HELPER_CONFIG.apiReady || window.VOCAB_HELPER_CONFIG.API_READY)) {
           // 从API获取
+          console.log(`[getTranslation] 🌐 Calling API for: ${word}`);
           const data = await window.apiClient.getWord(word);
+          console.log(`[getTranslation] 📥 API response:`, data);
           
           if (data && data.translation) {
             // 更新缓存
@@ -436,14 +443,21 @@
               timestamp: Date.now()
             });
             
+            console.log(`[getTranslation] ✅ Translation found:`, data.translation);
             return data.translation;
+          } else {
+            console.log(`[getTranslation] ⚠️ No translation in API response`);
           }
-        } else if (window.mockVocabulary) {
-          // 从Mock获取
-          return window.mockVocabulary.getTranslation(word);
+        } else {
+          console.log(`[getTranslation] ⚠️ API not ready, useAPI=${window.VOCAB_HELPER_CONFIG.useAPI}, apiReady=${window.VOCAB_HELPER_CONFIG.apiReady}`);
+          if (window.mockVocabulary) {
+            // 从Mock获取
+            console.log(`[getTranslation] 📦 Falling back to mock`);
+            return window.mockVocabulary.getTranslation(word);
+          }
         }
       } catch (error) {
-        console.error(`[TextProcessor] Failed to get translation for ${word}:`, error);
+        console.error(`[TextProcessor] ❌ Failed to get translation for ${word}:`, error);
         
         // API失败，降级到缓存
         if (cached && cached.translation) {
@@ -462,6 +476,7 @@
         return cached.translation;
       }
 
+      console.log(`[getTranslation] ❌ No translation found for: ${word}`);
       return null;
     }
 
