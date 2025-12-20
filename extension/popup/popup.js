@@ -150,13 +150,21 @@
       console.log('[Popup] Login success via SDK:', result);
       console.log('[Popup] SDK user object:', JSON.stringify(result.user, null, 2));
       
+      // ★ 优先使用 refresh token（长期有效，通常 7-30 天）
+      // 如果没有 refresh token，才使用 access token（15分钟）
+      const tokenToUse = result.refreshToken || result.token;
+      console.log('[Popup] Using token type:', result.refreshToken ? 'refresh_token (long-term)' : 'access_token (short-term)');
+      
       // 保存 token 到 chrome.storage.local
       const storageData = {
-        [JWT_STORAGE_KEY]: result.token,
+        [JWT_STORAGE_KEY]: tokenToUse,
         login_time: Date.now()
       };
       
-      // 如果有 refresh token，也保存
+      // 同时保存两种 token（备用）
+      if (result.token) {
+        storageData['access_token'] = result.token;
+      }
       if (result.refreshToken) {
         storageData['refresh_token'] = result.refreshToken;
       }
@@ -173,10 +181,10 @@
       }
       
       await chromeStorageSet(storageData);
-      console.log('[Popup] Token and user info saved to chrome.storage.local');
+      console.log('[Popup] Token saved to chrome.storage.local');
       
       // 更新当前状态
-      currentToken = result.token;
+      currentToken = tokenToUse;
       
       // 缓存用户信息
       if (result.user) {
@@ -254,7 +262,7 @@
     cachedUserInfo = null;
     loginInstance = null;
     await new Promise((resolve) => {
-      chrome.storage.local.remove([JWT_STORAGE_KEY, 'refresh_token', 'login_time', 'user_info'], resolve);
+      chrome.storage.local.remove([JWT_STORAGE_KEY, 'access_token', 'refresh_token', 'login_time', 'user_info'], resolve);
     });
   }
 
