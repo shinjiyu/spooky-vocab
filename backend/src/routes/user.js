@@ -3,12 +3,55 @@
 
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+// 注意：认证已在server.js中统一处理，无需在此处重复
 const { getCollection } = require('../utils/database');
 const { getOrCreateUserSettings } = require('../utils/mongo-helpers');
 
-// Apply auth middleware
-router.use(authMiddleware);
+/**
+ * GET /api/user/info
+ * 获取当前用户信息（从JWT token解码）
+ * 同时验证token有效性
+ */
+router.get('/info', async (req, res) => {
+  // req.user 和 req.user_id 由认证中间件设置
+  const tokenPayload = req.user;
+  const user_id = req.user_id;
+
+  if (!tokenPayload) {
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: 'INVALID_TOKEN',
+        message: 'Token payload not available'
+      }
+    });
+  }
+
+  // 从token payload中提取用户信息
+  const userInfo = {
+    user_id: user_id,
+    username: tokenPayload.username || tokenPayload.name || user_id,
+    email: tokenPayload.email || null,
+    exp: tokenPayload.exp || null,
+    iat: tokenPayload.iat || null,
+    token_valid: true
+  };
+
+  // 计算token剩余有效时间
+  if (tokenPayload.exp) {
+    const now = Math.floor(Date.now() / 1000);
+    userInfo.expires_in = Math.max(0, tokenPayload.exp - now);
+    userInfo.expires_at = new Date(tokenPayload.exp * 1000).toISOString();
+  }
+
+  res.json({
+    success: true,
+    data: userInfo,
+    meta: {
+      timestamp: new Date().toISOString()
+    }
+  });
+});
 
 /**
  * GET /api/user/settings

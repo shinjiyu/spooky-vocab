@@ -3,8 +3,9 @@
 
 const jwt = require('jsonwebtoken');
 
-// JWT密钥 - 生产环境应该从环境变量读取
-const JWT_SECRET = process.env.JWT_SECRET || 'spooky-vocab-secret-key-change-in-production';
+// JWT密钥 - 使用认证服务的JWT_SECRET_KEY
+// 认证服务JWT_SECRET_KEY: 5c88ab2e00452305d87b018fe39fcabbf250db022645a4adfaf4e55bb05d9cfa
+const JWT_SECRET = process.env.AUTH_SERVICE_JWT_SECRET || process.env.JWT_SECRET || '5c88ab2e00452305d87b018fe39fcabbf250db022645a4adfaf4e55bb05d9cfa';
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -35,12 +36,13 @@ function authMiddleware(req, res, next) {
     // 验证JWT token
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // 检查必需字段
-    if (!decoded.user_id) {
+    // 检查必需字段 - 认证服务可能使用 id、user_id 或 sub
+    const userId = decoded.user_id || decoded.id || decoded.sub;
+    if (!userId) {
       return res.status(401).json({ 
         error: {
           code: 'INVALID_TOKEN',
-          message: 'Token payload missing user_id'
+          message: 'Token payload missing user identifier'
         }
       });
     }
@@ -57,7 +59,8 @@ function authMiddleware(req, res, next) {
     }
 
     // 将user_id和完整payload附加到request对象
-    req.user_id = decoded.user_id;
+    // 兼容认证服务的不同字段名
+    req.user_id = decoded.user_id || decoded.id || decoded.sub;
     req.user = decoded;
 
     next();

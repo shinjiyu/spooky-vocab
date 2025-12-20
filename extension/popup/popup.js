@@ -1,5 +1,5 @@
 // Popup UI logic - 整合登陆、主界面、设置
-// Popup界面逻辑
+// Popup界面逻辑 - 使用 Kuroneko Auth SDK
 
 (function() {
   'use strict';
@@ -10,11 +10,8 @@
   const settingsView = document.getElementById('settingsView');
 
   // 登陆视图元素
-  const loginForm = document.getElementById('loginForm');
-  const userIdInput = document.getElementById('userId');
-  const cefrLevelSelect = document.getElementById('cefrLevel');
-  const loginBtn = document.getElementById('loginBtn');
   const loginStatus = document.getElementById('loginStatus');
+  const sdkLoginContainer = document.getElementById('sdkLoginContainer');
 
   // 主视图元素
   const userInfoEl = document.getElementById('userInfo');
@@ -28,18 +25,23 @@
 
   // 设置视图元素
   const backBtn = document.getElementById('backBtn');
-  const apiBaseUrlInput = document.getElementById('apiBaseUrl');
-  const testConnectionBtn = document.getElementById('testConnectionBtn');
-  const connectionStatus = document.getElementById('connectionStatus');
-  const saveSettingsBtn = document.getElementById('saveSettingsBtn');
   const logoutBtn = document.getElementById('logoutBtn');
   const settingsStatus = document.getElementById('settingsStatus');
   const currentUserIdEl = document.getElementById('currentUserId');
-  const presetBtns = document.querySelectorAll('.preset-btn');
+  const currentUsernameEl = document.getElementById('currentUsername');
+  const currentEmailEl = document.getElementById('currentEmail');
+  const tokenExpiryEl = document.getElementById('tokenExpiry');
+  
+  // 用户信息缓存
+  let cachedUserInfo = null;
+  
+  // SDK 登录实例
+  let loginInstance = null;
 
   // 配置
   let API_BASE_URL = window.CONFIG ? window.CONFIG.api.baseURL : 'http://localhost:3000';
-  const JWT_STORAGE_KEY = window.CONFIG ? window.CONFIG.jwt.storageKey : 'spooky_vocab_jwt';
+  const JWT_STORAGE_KEY = window.CONFIG ? window.CONFIG.jwt.storageKey : 'vocab_helper_jwt';
+  const AUTH_SERVICE_URL = 'https://kuroneko.chat';
 
   // 状态
   let currentToken = null;
@@ -61,7 +63,7 @@
         footerEl.title = `Build: ${window.VOCAB_HELPER_VERSION.buildDate}\nMode: ${window.VOCAB_HELPER_VERSION.mode}`;
       }
     }
-    console.log('[Popup] Initializing...');
+    console.log('[Popup] Initializing with SDK login...');
     
     // 加载API配置
     await loadApiConfig();
@@ -76,7 +78,8 @@
       startAutoRefresh();  // 开始自动刷新
     } else {
       showView('login');
-      loadSavedUserId();
+      // 初始化 SDK 登录
+      await initSDKLogin();
     }
     
     // 附加事件监听
@@ -108,79 +111,166 @@
 
   // ============ 登陆视图 ============
 
-  function loadSavedUserId() {
-    chrome.storage.local.get(['user_id', 'cefrLevel'], (result) => {
-      if (result.user_id) {
-        userIdInput.value = result.user_id;
-      }
-      if (result.cefrLevel) {
-        cefrLevelSelect.value = result.cefrLevel;
-      }
-    });
-  }
-
-  async function handleLogin(e) {
-    e.preventDefault();
+  // 初始化 SDK 登录
+  function initSDKLogin() {
+    console.log('[Popup] Initializing Auth SDK...');
     
-    const userId = userIdInput.value.trim();
-    const cefrLevel = cefrLevelSelect.value;
-    
-    if (!userId || !/^[a-zA-Z0-9_]+$/.test(userId)) {
-      showLoginStatus('error', '用户ID格式不正确');
+    // 检查 SDK 是否已加载
+    if (!window.KuronekoAuth || !window.KuronekoAuth.loginView) {
+      console.error('[Popup] Auth SDK not loaded');
+      showLoginStatus('error', '登录组件加载失败');
+      
+      // 降级方案：显示链接到认证页面
+      if (sdkLoginContainer) {
+        sdkLoginContainer.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <p style="color: #666; margin-bottom: 16px;">登录组件加载失败</p>
+            <a href="${AUTH_SERVICE_URL}/login" target="_blank" 
+               style="color: #667eea; text-decoration: none;">
+              点击这里前往登录页面 →
+            </a>
+          </div>
+        `;
+      }
       return;
     }
     
-    showLoginStatus('loading', '正在登陆...');
-    loginBtn.disabled = true;
+    const { loginView } = window.KuronekoAuth;
+    
+    // 创建登录实例
+    loginInstance = loginView.create({
+      container: sdkLoginContainer,
+      title: '登录',
+      theme: 'light',
+      apiUrl: AUTH_SERVICE_URL
+    });
+    
+    // 设置登录成功回调
+    loginInstance.onSuccess(async (result) => {
+      console.log('[Popup] Login success via SDK:', result);
+      console.log('[Popup] SDK user object:', JSON.stringify(result.user, null, 2));
+      
+      // 保存 token 到 chrome.storage.local
+      const storageData = {
+        [JWT_STORAGE_KEY]: result.token,
+        login_time: Date.now()
+      };
+      
+      // 如果有 refresh token，也保存
+      if (result.refreshToken) {
+        storageData['refresh_token'] = result.refreshToken;
+      }
+      
+      // 保存用户信息（SDK 返回的完整信息，包含 username）
+      if (result.user) {
+        const userInfo = {
+          user_id: result.user.id,
+          username: result.user.username,
+          email: result.user.email
+        };
+        storageData['user_info'] = userInfo;
+        console.log('[Popup] Saving user_info:', JSON.stringify(userInfo, null, 2));
+      }
+      
+      await chromeStorageSet(storageData);
+      console.log('[Popup] Token and user info saved to chrome.storage.local');
+      
+      // 更新当前状态
+      currentToken = result.token;
+      
+      // 缓存用户信息
+      if (result.user) {
+        cachedUserInfo = {
+          user_id: result.user.id,
+          username: result.user.username,
+          email: result.user.email
+        };
+        currentUserId = result.user.id;
+      }
+      
+      // 切换到主视图
+      showView('main');
+      await loadMainView();
+      startAutoRefresh();
+    });
+    
+    // 设置登录失败回调
+    loginInstance.onError((error) => {
+      console.error('[Popup] Login error via SDK:', error);
+      showLoginStatus('error', `登录失败: ${error.message || '未知错误'}`);
+    });
+    
+    // 挂载登录表单
+    loginInstance.mount();
+    console.log('[Popup] SDK login form mounted');
+  }
+  
+  // 获取用户信息
+  async function fetchUserInfo() {
+    if (!currentToken) {
+      console.warn('[Popup] No token available for fetchUserInfo');
+      return null;
+    }
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/test-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, cefr_level: cefrLevel })
+      const response = await fetch(`${API_BASE_URL}/api/user/info`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${currentToken}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          console.warn('[Popup] Token invalid, clearing...');
+          await clearToken();
+          showView('login');
+          await initSDKLogin();  // 重新初始化登录
+          return null;
+        }
         throw new Error(`HTTP ${response.status}`);
       }
       
       const data = await response.json();
       
-      if (!data.success || !data.data || !data.data.token) {
-        throw new Error('Invalid response');
+      if (data.success && data.data) {
+        cachedUserInfo = data.data;
+        console.log('[Popup] User info fetched:', cachedUserInfo);
+        return cachedUserInfo;
       }
       
-      // 保存token和用户信息
-      await chromeStorageSet({
-        [JWT_STORAGE_KEY]: data.data.token,
-        user_id: userId,
-        cefrLevel: cefrLevel,
-        login_time: new Date().toISOString()
-      });
-      
-      currentToken = data.data.token;
-      currentUserId = userId;
-      
-      showLoginStatus('success', '✓ 登陆成功！');
-      
-      setTimeout(() => {
-        showView('main');
-        loadMainView();
-        startAutoRefresh();
-      }, 1000);
-      
+      return null;
     } catch (error) {
-      console.error('[Popup] Login failed:', error);
-      showLoginStatus('error', `登陆失败: ${error.message}`);
-      loginBtn.disabled = false;
+      console.error('[Popup] Failed to fetch user info:', error);
+      return null;
     }
+  }
+  
+  // 清除token
+  async function clearToken() {
+    currentToken = null;
+    currentUserId = null;
+    cachedUserInfo = null;
+    loginInstance = null;
+    await new Promise((resolve) => {
+      chrome.storage.local.remove([JWT_STORAGE_KEY, 'refresh_token', 'login_time', 'user_info'], resolve);
+    });
   }
 
   function showLoginStatus(type, message) {
+    if (!loginStatus) return;
+    
+    if (!type && !message) {
+      loginStatus.className = 'status-message';
+      loginStatus.textContent = '';
+      return;
+    }
+    
     loginStatus.className = `status-message ${type}`;
     loginStatus.textContent = message;
     
-    if (type === 'error') {
+    if (type === 'error' || type === 'info') {
       setTimeout(() => {
         loginStatus.className = 'status-message';
       }, 3000);
@@ -203,12 +293,22 @@
   }
 
   async function loadToken() {
-    const result = await chromeStorageGet([JWT_STORAGE_KEY, 'user_id']);
+    console.log('[Popup] Loading token with key:', JWT_STORAGE_KEY);
+    const result = await chromeStorageGet([JWT_STORAGE_KEY, 'user_info']);
+    console.log('[Popup] chrome.storage.local result:', result);
     
     if (result[JWT_STORAGE_KEY]) {
       currentToken = result[JWT_STORAGE_KEY];
-      currentUserId = result.user_id;
-      console.log('[Popup] Token loaded:', !!currentToken);
+      console.log('[Popup] Token loaded successfully');
+    } else {
+      console.log('[Popup] No token found in chrome.storage.local');
+    }
+    
+    // 加载缓存的用户信息（包含 username）
+    if (result.user_info) {
+      cachedUserInfo = result.user_info;
+      currentUserId = result.user_info.user_id;
+      console.log('[Popup] Cached user info loaded:', cachedUserInfo.username);
     }
   }
 
@@ -233,7 +333,35 @@
   }
 
   async function loadUserInfo() {
-    if (currentUserId) {
+    console.log('[Popup] loadUserInfo called, cachedUserInfo:', JSON.stringify(cachedUserInfo, null, 2));
+    
+    // 保存登录时的用户名（SDK返回的真实用户名）
+    const savedUsername = cachedUserInfo?.username;
+    console.log('[Popup] Saved username from cache:', savedUsername);
+    
+    // 从后端获取用户信息（验证 token 有效性）
+    const apiUserInfo = await fetchUserInfo();
+    
+    if (apiUserInfo) {
+      console.log('[Popup] API returned userInfo:', JSON.stringify(apiUserInfo, null, 2));
+      
+      // API 返回的 username 可能只是 user_id，使用登录时保存的真实 username
+      if (savedUsername && savedUsername !== apiUserInfo.user_id) {
+        apiUserInfo.username = savedUsername;
+        console.log('[Popup] Using saved username:', savedUsername);
+      }
+      
+      cachedUserInfo = apiUserInfo;
+      currentUserId = apiUserInfo.user_id;
+      
+      const displayName = apiUserInfo.username || apiUserInfo.user_id || '用户';
+      console.log('[Popup] Display name:', displayName);
+      userInfoEl.textContent = `欢迎, ${displayName}`;
+    } else if (cachedUserInfo) {
+      // API 失败但有缓存的用户信息
+      const displayName = cachedUserInfo.username || cachedUserInfo.user_id || '用户';
+      userInfoEl.textContent = `欢迎, ${displayName}`;
+    } else if (currentUserId) {
       userInfoEl.textContent = `用户: ${currentUserId}`;
     } else {
       userInfoEl.textContent = '未登陆';
@@ -382,91 +510,48 @@
   // ============ 设置视图 ============
 
   function loadSettingsView() {
-    // 加载当前API URL
-    apiBaseUrlInput.value = API_BASE_URL;
-    
     // 加载用户信息
-    currentUserIdEl.textContent = currentUserId || '未登陆';
-  }
-
-  async function handleSaveSettings() {
-    const apiBaseUrl = apiBaseUrlInput.value.trim();
-    
-    if (!apiBaseUrl) {
-      showSettingsStatus('error', 'API URL不能为空');
-      return;
-    }
-    
-    try {
-      new URL(apiBaseUrl);
-    } catch (error) {
-      showSettingsStatus('error', 'API URL格式不正确');
-      return;
-    }
-    
-    await chromeStorageSet({ api_base_url: apiBaseUrl });
-    
-    API_BASE_URL = apiBaseUrl;
-    if (window.CONFIG) {
-      window.CONFIG.api.baseURL = apiBaseUrl;
-    }
-    
-    showSettingsStatus('success', '✓ 设置已保存！');
-    
-    setTimeout(() => {
-      showView('main');
-    }, 1500);
-  }
-
-  async function handleTestConnection() {
-    const apiBaseUrl = apiBaseUrlInput.value.trim();
-    
-    if (!apiBaseUrl) {
-      connectionStatus.textContent = '⚠️ 请先输入API URL';
-      connectionStatus.style.color = '#f44336';
-      return;
-    }
-    
-    connectionStatus.textContent = '⏳ 正在测试...';
-    connectionStatus.style.color = '#1976d2';
-    testConnectionBtn.disabled = true;
-    
-    try {
-      const response = await fetch(`${apiBaseUrl}/health`);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+    if (cachedUserInfo) {
+      // 显示真实用户名（不是 user_id）
+      const displayUsername = (cachedUserInfo.username && cachedUserInfo.username !== cachedUserInfo.user_id) 
+        ? cachedUserInfo.username 
+        : '-';
+      if (currentUsernameEl) currentUsernameEl.textContent = displayUsername;
+      if (currentUserIdEl) currentUserIdEl.textContent = cachedUserInfo.user_id || '-';
+      if (currentEmailEl) currentEmailEl.textContent = cachedUserInfo.email || '-';
+      if (tokenExpiryEl && cachedUserInfo.expires_at) {
+        const expiresIn = cachedUserInfo.expires_in;
+        const hours = Math.floor(expiresIn / 3600);
+        const minutes = Math.floor((expiresIn % 3600) / 60);
+        tokenExpiryEl.textContent = `${hours}小时${minutes}分钟后过期`;
+      } else if (tokenExpiryEl) {
+        tokenExpiryEl.textContent = '-';
       }
-      
-      const data = await response.json();
-      
-      if (data.status === 'ok') {
-        connectionStatus.textContent = `✓ 连接成功！`;
-        connectionStatus.style.color = '#2e7d32';
-      } else {
-        throw new Error('Invalid response');
-      }
-      
-    } catch (error) {
-      connectionStatus.textContent = `✗ 连接失败: ${error.message}`;
-      connectionStatus.style.color = '#f44336';
-    } finally {
-      testConnectionBtn.disabled = false;
+    } else {
+      if (currentUsernameEl) currentUsernameEl.textContent = '-';
+      if (currentUserIdEl) currentUserIdEl.textContent = currentUserId || '未登陆';
+      if (currentEmailEl) currentEmailEl.textContent = '-';
+      if (tokenExpiryEl) tokenExpiryEl.textContent = '-';
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     if (!confirm('确定要退出登陆吗？')) {
       return;
     }
     
-    chrome.storage.local.remove([JWT_STORAGE_KEY, 'user_id', 'cefrLevel', 'login_time'], () => {
-      currentToken = null;
-      currentUserId = null;
-      
-      stopAutoRefresh();
-      showView('login');
-    });
+    stopAutoRefresh();
+    await clearToken();
+    
+    // 清除 SDK 登录容器
+    if (sdkLoginContainer) {
+      sdkLoginContainer.innerHTML = '';
+    }
+    
+    showView('login');
+    
+    // 重新初始化 SDK 登录
+    await initSDKLogin();
   }
 
   function showSettingsStatus(type, message) {
@@ -481,9 +566,6 @@
   // ============ 事件监听 ============
 
   function attachEventListeners() {
-    // 登陆视图
-    loginForm.addEventListener('submit', handleLogin);
-    
     // 主视图
     settingsBtn.addEventListener('click', () => showView('settings'));
     
@@ -565,15 +647,7 @@
 
     // 设置视图
     backBtn.addEventListener('click', () => showView('main'));
-    saveSettingsBtn.addEventListener('click', handleSaveSettings);
-    testConnectionBtn.addEventListener('click', handleTestConnection);
     logoutBtn.addEventListener('click', handleLogout);
-    
-    presetBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        apiBaseUrlInput.value = btn.dataset.url;
-      });
-    });
   }
 
   // ============ 辅助函数 ============

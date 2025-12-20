@@ -4,13 +4,16 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
-const authMiddleware = require('../middleware/auth');
+// 注意：认证已在server.js统一网关中处理，refresh和verify端点无需重复认证
 const { JWT_SECRET } = require('../middleware/auth');
 const { getCollection } = require('../utils/database');
 
 /**
  * POST /api/auth/test-token
+ * [DEPRECATED] 此端点已废弃，请使用认证服务登录
  * Generate a test JWT token (for development/testing)
+ * 
+ * @deprecated 请使用认证服务 https://kuroneko.chat/login 进行登录
  */
 router.post('/test-token', async (req, res) => {
   const { user_id, cefr_level } = req.body;
@@ -114,8 +117,9 @@ router.post('/test-token', async (req, res) => {
 /**
  * POST /api/auth/refresh
  * Refresh an existing JWT token
+ * 注意：认证已在server.js统一网关中处理，无需在此处重复
  */
-router.post('/refresh', authMiddleware, async (req, res) => {
+router.post('/refresh', async (req, res) => {
   try {
     // 从当前token中提取信息
     const { user_id } = req.user;
@@ -167,8 +171,9 @@ router.post('/refresh', authMiddleware, async (req, res) => {
 /**
  * GET /api/auth/verify
  * Verify current JWT token (for debugging)
+ * 注意：认证已在server.js统一网关中处理，无需在此处重复
  */
-router.get('/verify', authMiddleware, (req, res) => {
+router.get('/verify', (req, res) => {
   res.json({
     success: true,
     data: {

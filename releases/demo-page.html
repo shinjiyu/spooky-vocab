@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spooky Vocab Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            background: #faf9f6;
+            min-height: 100vh;
+            padding: 40px;
+            line-height: 1.8;
+        }
+        
+        .article {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 60px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.08);
+            border-radius: 8px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #6B46C1;
+            padding-bottom: 15px;
+        }
+        
+        .meta {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        p {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: justify;
+        }
+        
+        /* 模拟高亮的生词 */
+        .highlighted-word {
+            background: linear-gradient(180deg, transparent 50%, rgba(107, 70, 193, 0.3) 50%);
+            border-bottom: 2px dashed #6B46C1;
+            cursor: pointer;
+            position: relative;
+        }
+        
+        /* 模拟翻译弹窗 - 固定位置展示 */
+        .tooltip-demo {
+            position: fixed;
+            top: 180px;
+            left: 580px;
+            background: linear-gradient(135deg, #1a1128 0%, #2d1f42 100%);
+            color: white;
+            padding: 20px 25px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            box-shadow: 0 15px 50px rgba(107, 70, 193, 0.4);
+            white-space: nowrap;
+            z-index: 100;
+            border: 2px solid rgba(183, 148, 246, 0.5);
+        }
+        
+        .tooltip-demo::after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 30px;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-top: 10px solid #2d1f42;
+        }
+        
+        .tooltip-demo .word-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #B794F6;
+            margin-bottom: 5px;
+        }
+        
+        .tooltip-demo .phonetic {
+            color: #a0a0a0;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+        
+        .tooltip-demo .translation {
+            color: #E2E8F0;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        
+        .tooltip-demo .actions {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .tooltip-demo .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            font-weight: 500;
+        }
+        
+        .tooltip-demo .btn-know {
+            background: linear-gradient(135deg, #38A169, #2F855A);
+            color: white;
+        }
+        
+        .tooltip-demo .btn-unknown {
+            background: linear-gradient(135deg, #E53E3E, #C53030);
+            color: white;
+        }
+        
+        /* 隐藏内联tooltip */
+        .highlighted-word .tooltip {
+            display: none;
+        }
+        
+        /* 扩展图标标注 */
+        .extension-badge {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #6B46C1, #4C3A8C);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(107, 70, 193, 0.4);
+        }
+        
+        .extension-badge img {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+        }
+        
+        .stats-badge {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            border: 2px solid #6B46C1;
+        }
+        
+        .stats-badge h3 {
+            font-size: 14px;
+            color: #6B46C1;
+            margin-bottom: 10px;
+        }
+        
+        .stats-row {
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            color: #333;
+        }
+        
+        .stats-row span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .stats-row .num {
+            font-weight: bold;
+            color: #6B46C1;
+        }
+    </style>
+</head>
+<body>
+    <div class="extension-badge">
+        <img src="../extension/icons/icon48.png" alt="Spooky Vocab">
+        <span>Spooky Vocab 已启用</span>
+    </div>
+    
+    <article class="article">
+        <h1>The Art of Learning Languages</h1>
+        <div class="meta">By John Smith · December 20, 2025 · 5 min read</div>
+        
+        <p>
+            Learning a new language is one of the most <span class="highlighted-word">rewarding</span> experiences one can have. It opens doors to new cultures, ideas, and <span class="highlighted-word">perspectives</span> that would otherwise remain hidden.
+        </p>
+        
+        <!-- 悬浮弹窗演示 -->
+        <div class="tooltip-demo">
+            <div class="word-title">rewarding</div>
+            <div class="phonetic">/rɪˈwɔːrdɪŋ/ · adj.</div>
+            <div class="translation">有回报的，值得的，有意义的</div>
+            <div class="actions">
+                <button class="btn btn-know">✓ 认识</button>
+                <button class="btn btn-unknown">✗ 不认识</button>
+            </div>
+        </div>
+        
+        <p>
+            The key to <span class="highlighted-word">mastering</span> any language lies in consistent practice and immersion. While traditional classroom learning has its merits, nothing compares to the <span class="highlighted-word">efficacy</span> of real-world exposure.
+        </p>
+        
+        <p>
+            Modern technology has made language learning more <span class="highlighted-word">accessible</span> than ever before. Tools like browser extensions can <span class="highlighted-word">seamlessly</span> integrate learning into your daily browsing routine, turning every article into a learning opportunity.
+        </p>
+        
+        <p>
+            The <span class="highlighted-word">acquisition</span> of vocabulary is perhaps the most <span class="highlighted-word">fundamental</span> aspect of language learning. Without an adequate word bank, even the most <span class="highlighted-word">sophisticated</span> grammatical knowledge becomes useless.
+        </p>
+    </article>
+    
+    <div class="stats-badge">
+        <h3>📊 本页学习统计</h3>
+        <div class="stats-row">
+            <span>生词: <b class="num">8</b></span>
+            <span>已掌握: <b class="num">156</b></span>
+            <span>待复习: <b class="num">12</b></span>
+        </div>
+    </div>
+</body>
+</html>
+

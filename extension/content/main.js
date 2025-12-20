@@ -81,6 +81,7 @@
 
   /**
    * 初始化认证和API
+   * 注意：不再自动请求test-token，用户必须通过认证服务登录
    */
   async function initializeAuth() {
     if (!window.VOCAB_HELPER_CONFIG.useAPI) {
@@ -95,42 +96,25 @@
     
     // 检查是否有有效token
     if (!window.jwtManager.isLoggedIn()) {
-      log('No valid token found, requesting test token...');
-      
-      // 获取或生成默认user_id
-      const userId = await getOrCreateUserId();
-      
-      try {
-        // 请求测试token
-        const result = await window.apiClient.getTestToken(userId, 'B1');
-        window.jwtManager.setToken(result.token);
-        log('Test token acquired', { user_id: userId });
-        
-      } catch (error) {
-        console.error('[VocabHelper] Failed to get test token:', error);
-        throw error;
-      }
-    } else {
-      log('Valid token found', { user_id: window.jwtManager.getUserId() });
-      
-      // 检查是否需要刷新
-      if (window.jwtManager.needsRefresh()) {
-        log('Token needs refresh, refreshing...');
-        try {
-          const result = await window.apiClient.refreshToken();
-          window.jwtManager.setToken(result.token);
-          log('Token refreshed successfully');
-        } catch (error) {
-          console.error('[VocabHelper] Token refresh failed:', error);
-          // 刷新失败，清除token并重新获取
-          await window.jwtManager.clear();
-          return initializeAuth();
-        }
-      }
+      // 没有有效token，不自动请求test-token
+      // 用户需要通过popup点击"前往登录"进行认证
+      log('No valid token found. Please login via popup.');
+      console.log('[VocabHelper] 请点击扩展图标登录');
+      window.VOCAB_HELPER_CONFIG.apiReady = false;
+      window.VOCAB_HELPER_CONFIG.API_READY = false;
+      return;
+    }
+    
+    log('Valid token found', { user_id: window.jwtManager.getUserId() });
+    
+    // 检查token是否即将过期
+    if (window.jwtManager.needsRefresh()) {
+      log('Token will expire soon, please re-login');
+      // 不再自动刷新，token过期后提示用户重新登录
     }
     
     window.VOCAB_HELPER_CONFIG.apiReady = true;
-    window.VOCAB_HELPER_CONFIG.API_READY = true;  // 兼容旧代码
+    window.VOCAB_HELPER_CONFIG.API_READY = true;
     log('API ready');
   }
 

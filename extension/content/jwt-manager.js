@@ -78,9 +78,10 @@
 
     /**
      * 获取用户ID
+     * 支持多种JWT payload格式: id, user_id, sub
      */
     getUserId() {
-      return this.payload?.user_id || null;
+      return this.payload?.id || this.payload?.user_id || this.payload?.sub || null;
     }
 
     /**

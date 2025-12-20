@@ -65,3 +65,6 @@ coverage/
 .Trashes
 
 .playwright-mcp/
+
+# Online config (sensitive operational data)
+online_config/

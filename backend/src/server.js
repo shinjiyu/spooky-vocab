@@ -9,6 +9,7 @@ require('dotenv').config();
 // Import database connection
 const { connectDatabase } = require('./utils/database');
 const { initDatabase } = require('./utils/init-db');
+const authMiddleware = require('./middleware/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,35 @@ app.use((req, res, next) => {
 
 // 静态文件服务（复习界面）
 app.use('/review', express.static(path.join(__dirname, '../public')));
+
+// 静态文件服务（公共页面：隐私政策等）
+app.use('/public', express.static(path.join(__dirname, '../public')));
+
+// ============ 统一认证网关 ============
+// 不需要认证的公开路径
+const publicPaths = [
+  '/health',
+  // 注意：test-token端点已移除，如需开发测试请使用认证服务
+];
+
+// 统一认证中间件 - 所有API路径都需要认证（除了公开路径）
+app.use((req, res, next) => {
+  // 检查是否为公开路径
+  const isPublicPath = publicPaths.some(path => req.path === path || req.path.startsWith(path + '/'));
+  
+  if (isPublicPath) {
+    return next();
+  }
+  
+  // API路径都需要认证
+  if (req.path.startsWith('/api/')) {
+    return authMiddleware(req, res, next);
+  }
+  
+  // 其他路径（如静态文件）不需要认证
+  next();
+});
+// ============ End 统一认证网关 ============
 
 // Health check
 app.get('/health', (req, res) => {

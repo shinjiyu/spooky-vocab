@@ -3,12 +3,9 @@
 
 const express = require('express');
 const router = express.Router();
-const authMiddleware = require('../middleware/auth');
+// 注意：认证已在server.js中统一处理，无需在此处重复
 const { getCollection } = require('../utils/database');
 const { buildSort } = require('../utils/mongo-helpers');
-
-// Apply auth middleware
-router.use(authMiddleware);
 
 /**
  * GET /api/review/words
