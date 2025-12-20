@@ -477,15 +477,15 @@
       clearInterval(refreshTimer);
     }
     
-    // 每1秒刷新一次统计数据（更实时）
+    // 每30秒刷新一次统计数据（避免过于频繁）
     refreshTimer = setInterval(() => {
       if (mainView.classList.contains('active')) {
         loadStats();
         loadKnownWords();
       }
-    }, 1000);
+    }, 30000);
     
-    console.log('[Popup] Auto-refresh started (1s interval)');
+    console.log('[Popup] Auto-refresh started (30s interval)');
     
     // 监听storage变化，立即刷新（最实时！）
     chrome.storage.onChanged.addListener((changes, areaName) => {

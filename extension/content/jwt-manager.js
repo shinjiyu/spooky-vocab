@@ -15,7 +15,7 @@
     }
 
     /**
-     * 初始化 - 从storage加载token
+     * 初始化 - 从storage加载token并监听变化
      */
     async init() {
       return new Promise((resolve) => {
@@ -26,9 +26,56 @@
           } else {
             this.log('No token found in storage');
           }
+          
+          // 监听 storage 变化，当用户从 popup 登录后自动更新
+          this.listenForTokenChanges();
+          
           resolve();
         });
       });
+    }
+    
+    /**
+     * 监听 token 变化（用户登录/登出时）
+     */
+    listenForTokenChanges() {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') return;
+        
+        if (changes[this.storageKey]) {
+          const newToken = changes[this.storageKey].newValue;
+          
+          if (newToken) {
+            console.log('[JWTManager] 🔄 Token updated from storage');
+            this.setToken(newToken);
+            
+            // 更新全局 API 就绪状态
+            if (window.VOCAB_HELPER_CONFIG) {
+              window.VOCAB_HELPER_CONFIG.apiReady = true;
+              window.VOCAB_HELPER_CONFIG.API_READY = true;
+              console.log('[JWTManager] ✅ API_READY set to true');
+            }
+            
+            // 触发页面重新处理
+            if (window.textProcessor) {
+              console.log('[JWTManager] 🔄 Triggering page reprocess...');
+              setTimeout(() => {
+                window.textProcessor.processPage();
+              }, 500);
+            }
+          } else {
+            console.log('[JWTManager] 🔒 Token removed (logged out)');
+            this.clear();
+            
+            if (window.VOCAB_HELPER_CONFIG) {
+              window.VOCAB_HELPER_CONFIG.apiReady = false;
+              window.VOCAB_HELPER_CONFIG.API_READY = false;
+            }
+          }
+        }
+      });
+      
+      this.log('Listening for token changes');
     }
 
     /**
