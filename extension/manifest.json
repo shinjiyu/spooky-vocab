@@ -12,7 +12,7 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://kuroneko.chat/*"],
+      "matches": ["<all_urls>"],
       "js": [
         "version.js",
         "config.js",
