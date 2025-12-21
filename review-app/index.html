@@ -4,8 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Spooky Vocab - 复习系统</title>
-  <!-- 引入 Kuroneko Auth SDK -->
-  <script src="https://kuroneko.chat/sdk/login.js"></script>
+  <!-- 引入 Kuroneko Auth SDK (ES Module) -->
+  <script type="module">
+    import { loginView } from 'https://kuroneko.chat/sdk/login.js';
+    window.KuronekoAuth = { loginView };
+    window.dispatchEvent(new Event('sdk-loaded'));
+  </script>
   <style>
     * {
       margin: 0;
@@ -781,7 +785,22 @@
         window.history.replaceState({}, document.title, window.location.pathname);
       }
       
-      app.init();
+      // 等待 SDK 加载完成（ES Module 是异步的）
+      if (window.KuronekoAuth) {
+        app.init();
+      } else {
+        window.addEventListener('sdk-loaded', () => {
+          console.log('[Review] SDK loaded event received');
+          app.init();
+        });
+        // 超时处理：如果 SDK 加载失败，仍然初始化（会显示降级方案）
+        setTimeout(() => {
+          if (!window.KuronekoAuth) {
+            console.log('[Review] SDK load timeout, initializing anyway');
+            app.init();
+          }
+        }, 3000);
+      }
     });
   </script>
 </body>
