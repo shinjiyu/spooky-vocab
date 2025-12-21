@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Spooky Vocab - 复习系统</title>
+  <!-- 引入 Kuroneko Auth SDK -->
+  <script src="https://kuroneko.chat/sdk/login.js"></script>
   <style>
     * {
       margin: 0;
@@ -55,29 +57,8 @@
       display: block;
     }
 
-    .form-group {
-      margin-bottom: 20px;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 8px;
-      color: #333;
-      font-weight: 500;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 12px 16px;
-      border: 2px solid #e0e0e0;
-      border-radius: 10px;
-      font-size: 14px;
-      transition: border-color 0.3s;
-    }
-
-    .form-group input:focus {
-      outline: none;
-      border-color: #667eea;
+    .sdk-login-container {
+      min-height: 300px;
     }
 
     .btn {
@@ -105,6 +86,11 @@
       background: #f5f5f5;
       color: #666;
       margin-top: 10px;
+    }
+
+    .btn-danger {
+      background: #f44336;
+      color: white;
     }
 
     .stats-grid {
@@ -284,6 +270,42 @@
       margin-bottom: 20px;
     }
 
+    .user-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-info span:first-child {
+      font-size: 20px;
+    }
+
+    .user-info .username {
+      color: #333;
+      font-weight: 500;
+    }
+
+    .logout-btn {
+      background: #f44336;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .logout-btn:hover {
+      background: #d32f2f;
+    }
+
     @media (max-width: 600px) {
       .stats-grid {
         grid-template-columns: 1fr;
@@ -309,16 +331,10 @@
     <!-- 登录视图 -->
     <div class="login-view active" id="loginView">
       <div class="card">
-        <h2 style="margin-bottom: 20px; color: #333;">开始使用</h2>
-        <div class="form-group">
-          <label>用户ID</label>
-          <input type="text" id="userId" placeholder="输入用户ID" value="test_user">
+        <h2 style="margin-bottom: 20px; color: #333; text-align: center;">登录</h2>
+        <div id="sdkLoginContainer" class="sdk-login-container">
+          <!-- SDK 登录表单将渲染在这里 -->
         </div>
-        <div class="form-group">
-          <label>API地址</label>
-          <input type="text" id="apiUrl" placeholder="API地址" value="https://kuroneko.chat/vocab-api">
-        </div>
-        <button class="btn btn-primary" onclick="app.login()">登录</button>
         <div id="loginMessage"></div>
       </div>
     </div>
@@ -327,14 +343,12 @@
     <div class="main-view" id="mainView">
       <!-- 用户信息栏 -->
       <div class="card" style="padding: 15px 20px; margin-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 20px;">👤</span>
-            <span style="color: #333; font-weight: 500;" id="currentUserDisplay">-</span>
+        <div class="user-bar">
+          <div class="user-info">
+            <span>👤</span>
+            <span class="username" id="currentUserDisplay">-</span>
           </div>
-          <button onclick="app.logout()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;">
-            退出登录
-          </button>
+          <button class="logout-btn" onclick="app.logout()">退出登录</button>
         </div>
       </div>
 
@@ -402,94 +416,195 @@
 
   <script>
     const app = {
-      apiUrl: '',
+      // 配置
+      apiUrl: 'https://kuroneko.chat/vocab-api',
+      authUrl: 'https://kuroneko.chat',
+      
+      // 状态
       token: '',
+      userInfo: null,
       currentCard: null,
       cards: [],
       currentIndex: 0,
       reviewStartTime: null,
+      loginInstance: null,
 
-      // 初始化 - 检查是否已登录
+      // ============ 初始化 ============
+      
       init() {
-        const savedToken = localStorage.getItem('token');
-        const savedApiUrl = localStorage.getItem('apiUrl');
-        const savedUserId = localStorage.getItem('userId');
+        console.log('[Review] Initializing...');
         
-        if (savedToken && savedApiUrl && savedUserId) {
+        // 检查是否已登录（使用 refresh_token）
+        const savedToken = localStorage.getItem('refresh_token') || localStorage.getItem('token');
+        const savedUserInfo = localStorage.getItem('user_info');
+        
+        if (savedToken && savedUserInfo) {
           this.token = savedToken;
-          this.apiUrl = savedApiUrl;
+          try {
+            this.userInfo = JSON.parse(savedUserInfo);
+          } catch (e) {
+            this.userInfo = null;
+          }
           
-          // 自动登录
-          document.getElementById('loginView').classList.remove('active');
-          document.getElementById('mainView').classList.add('active');
-          document.getElementById('currentUserDisplay').textContent = savedUserId;
-          this.loadStats();
+          // 验证 token 有效性
+          this.validateToken().then(valid => {
+            if (valid) {
+              this.showMainView();
+            } else {
+              this.showLoginView();
+            }
+          });
+        } else {
+          this.showLoginView();
         }
       },
 
-      // 退出登录
-      logout() {
-        if (!confirm('确定要退出登录吗？')) return;
-        
-        localStorage.removeItem('token');
-        localStorage.removeItem('apiUrl');
-        localStorage.removeItem('userId');
-        
-        this.token = '';
-        this.apiUrl = '';
-        
-        document.getElementById('mainView').classList.remove('active');
-        document.getElementById('loginView').classList.add('active');
-        document.getElementById('currentUserDisplay').textContent = '-';
+      // 验证 token 是否有效
+      async validateToken() {
+        try {
+          const response = await fetch(`${this.apiUrl}/api/user/info`, {
+            headers: {
+              'Authorization': `Bearer ${this.token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              console.log('[Review] Token valid, user:', data.data);
+              return true;
+            }
+          }
+          
+          console.log('[Review] Token invalid');
+          return false;
+        } catch (error) {
+          console.error('[Review] Token validation error:', error);
+          return false;
+        }
       },
 
-      // 登录
-      async login() {
-        const userId = document.getElementById('userId').value.trim();
-        const apiUrl = document.getElementById('apiUrl').value.trim();
+      // ============ 视图切换 ============
 
-        if (!userId || !apiUrl) {
-          this.showMessage('loginMessage', 'error', '请填写用户ID和API地址');
+      showLoginView() {
+        document.getElementById('loginView').classList.add('active');
+        document.getElementById('mainView').classList.remove('active');
+        this.initSDKLogin();
+      },
+
+      showMainView() {
+        document.getElementById('loginView').classList.remove('active');
+        document.getElementById('mainView').classList.add('active');
+        
+        // 显示用户名
+        const displayName = this.userInfo?.username || this.userInfo?.user_id || '用户';
+        document.getElementById('currentUserDisplay').textContent = displayName;
+        
+        // 加载统计
+        this.loadStats();
+      },
+
+      // ============ SDK 登录 ============
+
+      initSDKLogin() {
+        console.log('[Review] Initializing SDK login...');
+        
+        // 检查 SDK 是否已加载
+        if (!window.KuronekoAuth || !window.KuronekoAuth.loginView) {
+          console.error('[Review] Auth SDK not loaded');
+          this.showMessage('loginMessage', 'error', '登录组件加载失败，请刷新页面');
+          
+          // 降级方案
+          document.getElementById('sdkLoginContainer').innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <p style="color: #666; margin-bottom: 16px;">登录组件加载失败</p>
+              <a href="${this.authUrl}/login?redirect=${encodeURIComponent(window.location.href)}" 
+                 style="color: #667eea; text-decoration: none;">
+                点击这里前往登录页面 →
+              </a>
+            </div>
+          `;
           return;
         }
 
-        this.apiUrl = apiUrl;
+        const { loginView } = window.KuronekoAuth;
 
-        try {
-          this.showMessage('loginMessage', 'info', '正在连接...');
-          
-          // 获取JWT token
-          const response = await fetch(`${apiUrl}/api/auth/test-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: userId })
-          });
+        // 创建登录实例
+        this.loginInstance = loginView.create({
+          container: document.getElementById('sdkLoginContainer'),
+          title: '登录',
+          theme: 'light',
+          apiUrl: this.authUrl
+        });
 
-          const data = await response.json();
+        // 登录成功回调
+        this.loginInstance.onSuccess((result) => {
+          console.log('[Review] Login success:', result);
           
-          if (data.success) {
-            this.token = data.data.token;
-            localStorage.setItem('token', this.token);
-            localStorage.setItem('apiUrl', this.apiUrl);
-            localStorage.setItem('userId', userId);
-            
-            this.showMessage('loginMessage', 'success', '登录成功！');
-            
-            setTimeout(() => {
-              document.getElementById('loginView').classList.remove('active');
-              document.getElementById('mainView').classList.add('active');
-              document.getElementById('currentUserDisplay').textContent = userId;
-              this.loadStats();
-            }, 500);
-          } else {
-            this.showMessage('loginMessage', 'error', '登录失败：' + data.error.message);
+          // ★ 优先使用 refresh token（长期有效）
+          const tokenToUse = result.refreshToken || result.token;
+          console.log('[Review] Using token type:', result.refreshToken ? 'refresh_token (long-term)' : 'access_token (short-term)');
+          
+          this.token = tokenToUse;
+          
+          // 保存到 localStorage
+          localStorage.setItem('token', tokenToUse);
+          if (result.refreshToken) {
+            localStorage.setItem('refresh_token', result.refreshToken);
           }
-        } catch (error) {
-          this.showMessage('loginMessage', 'error', '连接失败：' + error.message);
-        }
+          if (result.token) {
+            localStorage.setItem('access_token', result.token);
+          }
+          
+          // 保存用户信息
+          if (result.user) {
+            this.userInfo = {
+              user_id: result.user.id,
+              username: result.user.username,
+              email: result.user.email
+            };
+            localStorage.setItem('user_info', JSON.stringify(this.userInfo));
+          }
+          
+          this.showMainView();
+        });
+
+        // 登录失败回调
+        this.loginInstance.onError((error) => {
+          console.error('[Review] Login error:', error);
+          this.showMessage('loginMessage', 'error', `登录失败: ${error.message || '未知错误'}`);
+        });
+
+        // 挂载登录表单
+        this.loginInstance.mount();
+        console.log('[Review] SDK login form mounted');
       },
 
-      // 加载统计数据
+      // ============ 退出登录 ============
+
+      logout() {
+        if (!confirm('确定要退出登录吗？')) return;
+        
+        // 清除所有存储
+        localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_info');
+        
+        this.token = '';
+        this.userInfo = null;
+        this.loginInstance = null;
+        
+        // 清空 SDK 容器
+        document.getElementById('sdkLoginContainer').innerHTML = '';
+        
+        // 显示登录视图
+        this.showLoginView();
+      },
+
+      // ============ 统计与复习 ============
+
       async loadStats() {
         try {
           const response = await this.apiRequest('/api/sr/stats');
@@ -502,14 +617,12 @@
             document.getElementById('statStreak').textContent = stats.activity.study_streak_days;
           }
         } catch (error) {
-          console.error('加载统计失败:', error);
+          console.error('[Review] Load stats failed:', error);
         }
       },
 
-      // 开始复习
       async startReview() {
         try {
-          // 获取待复习单词
           const response = await this.apiRequest('/api/sr/due?limit=20');
           
           if (response.success) {
@@ -529,7 +642,6 @@
         }
       },
 
-      // 刷新单词列表
       async refreshWords() {
         try {
           const response = await this.apiRequest('/api/sr/due?limit=20');
@@ -543,38 +655,31 @@
         }
       },
 
-      // 显示卡片
       showCard(card) {
         this.currentCard = card;
         this.reviewStartTime = Date.now();
         
         document.getElementById('wordText').textContent = card.word;
-        // 格式化音标显示：加方括号
         const phonetic = card.phonetic ? `/${card.phonetic}/` : '';
         document.getElementById('phoneticText').textContent = phonetic;
         document.getElementById('translationText').textContent = card.translation;
         
-        // 显示例句
         if (card.contexts && card.contexts.length > 0) {
           document.getElementById('contextText').textContent = card.contexts[0].sentence;
         } else {
           document.getElementById('contextText').textContent = '';
         }
         
-        // 重置翻转状态
         document.getElementById('flipCard').classList.remove('flipped');
         
-        // 更新进度
         this.showMessage('reviewMessage', 'info', 
           `进度: ${this.currentIndex + 1}/${this.cards.length} | FSRS状态: ${this.getStateName(card.fsrs.state)}`);
       },
 
-      // 翻转卡片
       flipCard() {
         document.getElementById('flipCard').classList.toggle('flipped');
       },
 
-      // 提交评分
       async submitGrade(grade) {
         if (!this.currentCard) return;
         
@@ -594,7 +699,6 @@
             this.showMessage('reviewMessage', 'success', 
               `✓ 已记录！下次复习: ${nextInterval.toFixed(1)}天后`);
             
-            // 延迟显示下一张卡片
             setTimeout(() => {
               this.nextCard();
             }, 1000);
@@ -604,12 +708,10 @@
         }
       },
 
-      // 下一张卡片
       nextCard() {
         this.currentIndex++;
         
         if (this.currentIndex >= this.cards.length) {
-          // 复习完成
           document.getElementById('reviewCard').classList.add('hidden');
           alert('🎉 本轮复习完成！');
           this.loadStats();
@@ -618,7 +720,8 @@
         }
       },
 
-      // API请求封装
+      // ============ 辅助方法 ============
+
       async apiRequest(endpoint, options = {}) {
         const url = `${this.apiUrl}${endpoint}`;
         const config = {
@@ -631,18 +734,34 @@
         };
         
         const response = await fetch(url, config);
-        return await response.json();
+        const data = await response.json();
+        
+        // 如果 token 无效，跳转到登录
+        if (response.status === 401) {
+          console.log('[Review] Token expired, redirecting to login...');
+          this.logout();
+          throw new Error('登录已过期，请重新登录');
+        }
+        
+        return data;
       },
 
-      // 显示消息
       showMessage(elementId, type, message) {
         const element = document.getElementById(elementId);
+        if (!element) return;
+        
         element.className = `message message-${type}`;
         element.textContent = message;
         element.classList.remove('hidden');
+        
+        if (type === 'error') {
+          setTimeout(() => {
+            element.className = 'message';
+            element.textContent = '';
+          }, 5000);
+        }
       },
 
-      // 获取状态名称
       getStateName(state) {
         const names = ['新卡片', '学习中', '复习中', '重新学习'];
         return names[state] || '未知';
@@ -651,9 +770,19 @@
 
     // 页面加载完成后初始化
     window.addEventListener('DOMContentLoaded', () => {
+      // 检查 URL 参数中是否有 token（从登录页回调）
+      const urlParams = new URLSearchParams(window.location.search);
+      const tokenFromUrl = urlParams.get('token');
+      
+      if (tokenFromUrl) {
+        console.log('[Review] Token from URL callback');
+        localStorage.setItem('token', tokenFromUrl);
+        // 清除 URL 参数
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      
       app.init();
     });
   </script>
 </body>
 </html>
-
