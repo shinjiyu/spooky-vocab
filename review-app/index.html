@@ -1053,10 +1053,6 @@
       },
 
       async deleteWord(word) {
-        if (!confirm(`确定要删除单词 "${word}" 吗？\n\n删除后将无法恢复，包括所有复习记录。`)) {
-          return;
-        }
-
         try {
           const response = await this.apiRequest(`/api/sr/words/${encodeURIComponent(word)}`, {
             method: 'DELETE'
