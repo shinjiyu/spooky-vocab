@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Spooky Vocab - 智能英语单词助手",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "智能识别网页中的生词并显示翻译，支持间隔重复学习算法，帮助你高效记忆英语单词。",
   "permissions": [
     "storage",

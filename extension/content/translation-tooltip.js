@@ -95,7 +95,13 @@
           margin-right: 8px;
         }
 
-        .tooltip-close {
+        .tooltip-buttons {
+          display: flex;
+          gap: ${this.isMobile ? '8px' : '4px'};
+          flex-shrink: 0;
+        }
+
+        .tooltip-btn {
           background: rgba(255, 255, 255, 0.1);
           border: none;
           color: #ffffff;
@@ -113,12 +119,20 @@
           flex-shrink: 0;
         }
 
-        .tooltip-close:hover {
+        .tooltip-btn:hover {
           background: rgba(255, 255, 255, 0.2);
         }
 
-        .tooltip-close:active {
+        .tooltip-btn:active {
           background: rgba(255, 255, 255, 0.3);
+        }
+
+        .tooltip-btn.known {
+          color: #4caf50;
+        }
+
+        .tooltip-btn.dismiss {
+          color: #ff6b6b;
         }
 
         .tooltip-phonetic {
@@ -168,10 +182,20 @@
 
       // 构建浮层内容
       const tooltip = this.shadowRoot.querySelector('.tooltip');
+      
+      // 手机端显示两个按钮：关闭 + 已知
+      // PC端只显示已知按钮
+      const buttonsHtml = this.isMobile 
+        ? `<div class="tooltip-buttons">
+             <button class="tooltip-btn known" data-action="known" title="我认识这个词">✓</button>
+             <button class="tooltip-btn dismiss" data-action="dismiss" title="关闭">✕</button>
+           </div>`
+        : `<button class="tooltip-btn known" data-action="known" title="我认识这个词">✓</button>`;
+      
       tooltip.innerHTML = `
         <div class="tooltip-header">
           <span class="tooltip-word">${word}</span>
-          <button class="tooltip-close" data-action="close" title="我认识这个词">✓</button>
+          ${buttonsHtml}
         </div>
         ${translation.phonetic ? `<div class="tooltip-phonetic">/${translation.phonetic}/</div>` : ''}
         <div class="tooltip-translation">${translation.translation}</div>
@@ -183,12 +207,21 @@
         tooltip.classList.add('mobile');
       }
 
-      // 绑定关闭按钮事件
-      const closeBtn = tooltip.querySelector('[data-action="close"]');
-      closeBtn.addEventListener('click', (e) => {
+      // 绑定"我认识"按钮事件
+      const knownBtn = tooltip.querySelector('[data-action="known"]');
+      knownBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.handleClose(word);
       });
+
+      // 绑定关闭按钮事件（仅手机端）
+      const dismissBtn = tooltip.querySelector('[data-action="dismiss"]');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.hide();
+        });
+      }
 
       // 定位浮层
       this.positionTooltip(targetElement, tooltip);
