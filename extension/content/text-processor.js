@@ -21,7 +21,8 @@
       // 不需要处理的标签
       this.excludedTags = new Set([
         'SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
-        'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'CODE', 'PRE'
+        'INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'CODE', 'PRE',
+        'A' // 链接内的文本不处理，避免与链接点击冲突
       ]);
 
       // 单词匹配正则（包括连字符和缩写）

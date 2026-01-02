@@ -319,17 +319,36 @@
 
     // 附加全局事件监听器
     attachGlobalListeners() {
-      // 移动端：点击浮层外部隐藏
-      if (this.isMobile) {
-        document.addEventListener('click', (e) => {
-          if (this.isVisible && !this.tooltipContainer.contains(e.target)) {
-            // 检查是否点击的是单词元素
-            const isWordElement = e.target.classList && e.target.classList.contains('vocab-word');
-            if (!isWordElement) {
-              this.hide();
-            }
+      // 点击任意位置关闭翻译窗口（手机和PC通用）
+      // 使用捕获阶段，确保在单词点击事件之前执行
+      document.addEventListener('click', (e) => {
+        if (this.isVisible) {
+          // 如果点击的是浮层内部（如关闭按钮），不处理
+          if (this.tooltipContainer.contains(e.target)) {
+            return;
           }
-        });
+          
+          // 关闭翻译窗口
+          this.hide();
+          
+          // 阻止事件继续传播，避免触发新的翻译
+          e.stopPropagation();
+          e.preventDefault();
+          
+          this.log('Tooltip closed by clicking outside');
+        }
+      }, true); // true = 捕获阶段
+
+      // 触摸设备：触摸开始时也需要关闭（避免touchstart触发的问题）
+      if (this.isMobile) {
+        document.addEventListener('touchstart', (e) => {
+          if (this.isVisible && !this.tooltipContainer.contains(e.target)) {
+            this.hide();
+            e.stopPropagation();
+            e.preventDefault();
+            this.log('Tooltip closed by touch outside');
+          }
+        }, true);
       }
 
       // 滚动时隐藏浮层
