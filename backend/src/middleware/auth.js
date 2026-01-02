@@ -4,7 +4,7 @@
 const jwt = require('jsonwebtoken');
 
 // JWT密钥 - 从环境变量读取
-const JWT_SECRET = process.env.AUTH_SERVICE_JWT_SECRET || process.env.JWT_SECRET || 'your_jwt_secret_change_in_production';
+const JWT_SECRET = process.env.AUTH_SERVICE_JWT_SECRET || process.env.JWT_SECRET || 'your-auth-service-jwt-secret';
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;

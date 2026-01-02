@@ -68,3 +68,6 @@ coverage/
 
 # Online config (sensitive operational data)
 online_config/
+
+# Local config (contains secrets)
+config/config.local.js
