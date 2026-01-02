@@ -12,7 +12,7 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - AUTH_SERVICE_JWT_SECRET=${AUTH_SERVICE_JWT_SECRET:-5c88ab2e00452305d87b018fe39fcabbf250db022645a4adf4e55bb05d9cfa}
+      - AUTH_SERVICE_JWT_SECRET=${AUTH_SERVICE_JWT_SECRET:-your_auth_service_jwt_secret}
       - JWT_SECRET=${JWT_SECRET:-your_jwt_secret_change_in_production}
       - JWT_EXPIRATION=24h
     volumes:

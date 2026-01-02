@@ -4,10 +4,10 @@
  * 使用方式:
  * 
  * // ES Module
- * import { loginView } from 'https://kuroneko.chat/sdk/login.js';
+ * import { loginView } from 'https://your-domain.com/sdk/login.js';
  * 
  * // Script 标签
- * // <script src="https://kuroneko.chat/sdk/login.js"></script>
+ * // <script src="https://your-domain.com/sdk/login.js"></script>
  * // const { loginView } = window.KuronekoAuth;
  * 
  * const login = loginView.create({
@@ -22,7 +22,7 @@
 
 // 默认配置
 const DEFAULT_OPTIONS = {
-  apiUrl: 'https://kuroneko.chat',
+  apiUrl: 'https://your-domain.com',
   title: '登录',
   theme: 'light'
 };

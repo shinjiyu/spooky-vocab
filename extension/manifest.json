@@ -8,7 +8,7 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://kuroneko.chat/*"
+    "https://your-domain.com/*"
   ],
   "content_scripts": [
     {

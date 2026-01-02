@@ -3,9 +3,8 @@
 
 const jwt = require('jsonwebtoken');
 
-// JWT密钥 - 使用认证服务的JWT_SECRET_KEY
-// 认证服务JWT_SECRET_KEY: 5c88ab2e00452305d87b018fe39fcabbf250db022645a4adfaf4e55bb05d9cfa
-const JWT_SECRET = process.env.AUTH_SERVICE_JWT_SECRET || process.env.JWT_SECRET || '5c88ab2e00452305d87b018fe39fcabbf250db022645a4adfaf4e55bb05d9cfa';
+// JWT密钥 - 从环境变量读取
+const JWT_SECRET = process.env.AUTH_SERVICE_JWT_SECRET || process.env.JWT_SECRET || 'your_jwt_secret_change_in_production';
 
 function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;

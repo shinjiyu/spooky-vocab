@@ -13,7 +13,7 @@ const { getCollection } = require('../utils/database');
  * [DEPRECATED] 此端点已废弃，请使用认证服务登录
  * Generate a test JWT token (for development/testing)
  * 
- * @deprecated 请使用认证服务 https://kuroneko.chat/login 进行登录
+ * @deprecated 请使用认证服务 https://your-domain.com/login 进行登录
  */
 router.post('/test-token', async (req, res) => {
   const { user_id, cefr_level } = req.body;
