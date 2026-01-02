@@ -65,6 +65,12 @@ async function initDatabase() {
     await ecdict.createIndex({ word: 1 }, { unique: true });
     console.log('    ✓ Created unique index on word');
 
+    // 6. deleted_words 集合（用户删除的单词，避免重复添加）
+    console.log('  Setting up deleted_words collection...');
+    const deletedWords = db.collection('deleted_words');
+    await deletedWords.createIndex({ user_id: 1, word: 1 }, { unique: true });
+    console.log('    ✓ Created unique compound index on user_id + word');
+
     console.log('✅ MongoDB database initialized successfully (with FSRS support)');
     console.log('\nCollections created:');
     console.log('  - user_settings');
@@ -72,6 +78,7 @@ async function initDatabase() {
     console.log('  - word_contexts');
     console.log('  - review_log');
     console.log('  - ecdict');
+    console.log('  - deleted_words');
     
     return true;
   } catch (error) {

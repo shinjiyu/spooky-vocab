@@ -546,7 +546,7 @@ router.get('/words', async (req, res) => {
 
 /**
  * DELETE /api/sr/words/:word
- * 删除单个单词
+ * 删除单个单词（并记录到已删除列表，避免重复添加）
  */
 router.delete('/words/:word', async (req, res) => {
   const user_id = req.user_id;
@@ -558,6 +558,7 @@ router.delete('/words/:word', async (req, res) => {
     const wordRecords = getCollection('word_records');
     const wordContexts = getCollection('word_contexts');
     const reviewLog = getCollection('review_log');
+    const deletedWords = getCollection('deleted_words');
 
     // 检查单词是否存在
     const existingRecord = await wordRecords.findOne({ user_id, word });
@@ -569,6 +570,24 @@ router.delete('/words/:word', async (req, res) => {
         }
       });
     }
+
+    // 将单词添加到已删除列表（避免之后重复添加）
+    await deletedWords.updateOne(
+      { user_id, word },
+      {
+        $set: {
+          user_id,
+          word,
+          deleted_at: new Date(),
+          original_data: {
+            familiarity_score: existingRecord.familiarity_score,
+            reps: existingRecord.reps,
+            state: existingRecord.state
+          }
+        }
+      },
+      { upsert: true }
+    );
 
     // 删除单词记录
     await wordRecords.deleteOne({ user_id, word });
@@ -586,7 +605,8 @@ router.delete('/words/:word', async (req, res) => {
         deleted: {
           word_record: true,
           contexts: contextsResult.deletedCount,
-          review_logs: logsResult.deletedCount
+          review_logs: logsResult.deletedCount,
+          added_to_blacklist: true
         }
       },
       meta: {
@@ -601,6 +621,78 @@ router.delete('/words/:word', async (req, res) => {
         message: 'Failed to delete word',
         details: error.message
       }
+    });
+  }
+});
+
+/**
+ * GET /api/sr/deleted
+ * 获取已删除的单词列表
+ */
+router.get('/deleted', async (req, res) => {
+  const user_id = req.user_id;
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+
+  try {
+    const deletedWords = getCollection('deleted_words');
+
+    const total = await deletedWords.countDocuments({ user_id });
+    const words = await deletedWords
+      .find({ user_id })
+      .sort({ deleted_at: -1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+
+    res.json({
+      success: true,
+      data: {
+        words: words.map(w => ({
+          word: w.word,
+          deleted_at: w.deleted_at,
+          original_data: w.original_data
+        })),
+        pagination: { total, limit, offset, has_more: total > offset + limit }
+      },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (error) {
+    console.error('[SR API] Error getting deleted words:', error);
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to get deleted words' }
+    });
+  }
+});
+
+/**
+ * POST /api/sr/restore/:word
+ * 从已删除列表恢复单词（允许重新添加）
+ */
+router.post('/restore/:word', async (req, res) => {
+  const user_id = req.user_id;
+  const word = req.params.word.toLowerCase();
+
+  try {
+    const deletedWords = getCollection('deleted_words');
+
+    const result = await deletedWords.deleteOne({ user_id, word });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({
+        error: { code: 'NOT_FOUND', message: 'Word not in deleted list' }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: { word, restored: true },
+      meta: { timestamp: new Date().toISOString() }
+    });
+  } catch (error) {
+    console.error('[SR API] Error restoring word:', error);
+    res.status(500).json({
+      error: { code: 'INTERNAL_ERROR', message: 'Failed to restore word' }
     });
   }
 });

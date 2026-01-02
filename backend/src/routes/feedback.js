@@ -171,6 +171,24 @@ router.post('/unknown', async (req, res) => {
   try {
     const lowerWord = word.toLowerCase();
     
+    // 检查单词是否在已删除列表中（用户之前删除过，不再添加）
+    const deletedWords = getCollection('deleted_words');
+    const isDeleted = await deletedWords.findOne({ user_id, word: lowerWord });
+    if (isDeleted) {
+      console.log(`[Feedback API] Word in deleted list, skipping: ${lowerWord}`);
+      return res.json({
+        success: true,
+        data: {
+          word: lowerWord,
+          action: 'skipped',
+          reason: 'word_in_deleted_list'
+        },
+        meta: {
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+    
     // 验证单词有效性
     let dictEntry = null;
     if (dictionaryService.isReady()) {
