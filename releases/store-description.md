@@ -79,7 +79,7 @@ Spooky Vocab - 智能英语单词助手
 本扩展需要 activeTab 权限来读取当前页面的文本内容，以便识别并高亮显示用户可能不认识的英语单词。当用户悬停在高亮单词上时，扩展会显示翻译和释义。此权限仅在用户主动浏览页面时使用，不会在后台访问任何页面。
 
 ## 需要请求主机权限的理由
-本扩展请求 https://your-domain.com/* 的主机权限，用于：
+本扩展请求 https://kuroneko.chat/* 的主机权限，用于：
 1. 与后端 API 服务器通信，获取单词翻译和释义
 2. 同步用户的学习进度到云端
 3. 加载用户登录认证所需的 SDK
@@ -93,7 +93,7 @@ Spooky Vocab 是一款英语单词学习助手。它的单一用途是：帮助�
 
 ## 隐私权政策网址
 ```
-https://your-domain.com/vocab-api/public/privacy.html
+https://kuroneko.chat/vocab-api/public/privacy.html
 ```
 
 

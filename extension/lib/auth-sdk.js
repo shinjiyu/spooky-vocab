@@ -22,7 +22,7 @@
 
 // 默认配置
 const DEFAULT_OPTIONS = {
-  apiUrl: 'https://your-domain.com',
+  apiUrl: 'https://kuroneko.chat',
   title: '登录',
   theme: 'light'
 };

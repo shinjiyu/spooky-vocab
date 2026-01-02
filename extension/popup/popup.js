@@ -41,7 +41,7 @@
   // 配置
   let API_BASE_URL = window.CONFIG ? window.CONFIG.api.baseURL : 'http://localhost:3000';
   const JWT_STORAGE_KEY = window.CONFIG ? window.CONFIG.jwt.storageKey : 'vocab_helper_jwt';
-  const AUTH_SERVICE_URL = 'https://your-domain.com';
+  const AUTH_SERVICE_URL = 'https://kuroneko.chat';
 
   // 状态
   let currentToken = null;
