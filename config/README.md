@@ -4,9 +4,21 @@
 
 本目录用于管理项目的敏感配置信息，如服务器地址、密钥等。
 
+**配置存储在私有仓库**: `https://git.wemomo.com/yu.zhenyu/online_config`
+
 ## 🔧 使用方法
 
-### 1. 创建本地配置
+### 方式1：从私有仓库同步配置（推荐）
+
+```bash
+# 从 online_config 仓库同步配置
+./scripts/sync-config.sh
+
+# 应用配置到项目文件
+node scripts/apply-config.js
+```
+
+### 方式2：手动创建本地配置
 
 ```bash
 # 复制示例配置
@@ -14,14 +26,14 @@ cp config/config.example.js config/config.local.js
 
 # 编辑配置，填入真实值
 vim config/config.local.js
+
+# 应用配置
+node scripts/apply-config.js
 ```
 
-### 2. 应用配置到项目文件
+### 提交代码前（重要！）
 
 ```bash
-# 应用本地配置（用于开发和部署）
-node scripts/apply-config.js
-
 # 恢复为示例配置（用于提交到 git）
 node scripts/apply-config.js --reset
 ```
