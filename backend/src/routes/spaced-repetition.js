@@ -453,6 +453,159 @@ router.post('/batch-info', async (req, res) => {
 });
 
 /**
+ * GET /api/sr/words
+ * 获取用户的所有单词列表
+ */
+router.get('/words', async (req, res) => {
+  const user_id = req.user_id;
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const offset = parseInt(req.query.offset) || 0;
+  const sort_by = req.query.sort || 'created_at'; // created_at, word, due_date, state
+  const order = req.query.order === 'asc' ? 1 : -1;
+  const state_filter = req.query.state; // 可选：筛选特定状态
+
+  try {
+    console.log(`[SR API] Getting all words for user ${user_id}`, { limit, offset, sort_by, order });
+
+    const wordRecords = getCollection('word_records');
+    
+    // 构建查询条件
+    const query = { user_id };
+    if (state_filter !== undefined && state_filter !== '') {
+      query.state = parseInt(state_filter);
+    }
+
+    // 获取总数
+    const total = await wordRecords.countDocuments(query);
+
+    // 构建排序
+    const sortObj = {};
+    sortObj[sort_by] = order;
+
+    // 查询单词列表
+    const words = await wordRecords
+      .find(query)
+      .sort(sortObj)
+      .skip(offset)
+      .limit(limit)
+      .project({
+        word: 1,
+        state: 1,
+        stability: 1,
+        difficulty: 1,
+        due_date: 1,
+        reps: 1,
+        lapses: 1,
+        created_at: 1,
+        last_review: 1
+      })
+      .toArray();
+
+    // 丰富数据
+    const now = new Date();
+    const enrichedWords = words.map(w => ({
+      word: w.word,
+      state: w.state || 0,
+      state_name: ['新卡片', '学习中', '复习中', '重新学习'][w.state] || '未知',
+      stability: w.stability || 0,
+      difficulty: w.difficulty || 5.0,
+      due_date: w.due_date,
+      is_due: w.due_date ? new Date(w.due_date) <= now : true,
+      reps: w.reps || 0,
+      lapses: w.lapses || 0,
+      created_at: w.created_at,
+      last_review: w.last_review
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        words: enrichedWords,
+        pagination: {
+          total,
+          limit,
+          offset,
+          has_more: total > offset + limit
+        }
+      },
+      meta: {
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[SR API] Error getting words:', error);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to get words',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
+ * DELETE /api/sr/words/:word
+ * 删除单个单词
+ */
+router.delete('/words/:word', async (req, res) => {
+  const user_id = req.user_id;
+  const word = req.params.word.toLowerCase();
+
+  try {
+    console.log(`[SR API] Deleting word: ${word} for user ${user_id}`);
+
+    const wordRecords = getCollection('word_records');
+    const wordContexts = getCollection('word_contexts');
+    const reviewLog = getCollection('review_log');
+
+    // 检查单词是否存在
+    const existingRecord = await wordRecords.findOne({ user_id, word });
+    if (!existingRecord) {
+      return res.status(404).json({
+        error: {
+          code: 'WORD_NOT_FOUND',
+          message: 'Word not found in vocabulary'
+        }
+      });
+    }
+
+    // 删除单词记录
+    await wordRecords.deleteOne({ user_id, word });
+
+    // 删除相关上下文
+    const contextsResult = await wordContexts.deleteMany({ user_id, word });
+
+    // 删除相关复习日志
+    const logsResult = await reviewLog.deleteMany({ user_id, word });
+
+    res.json({
+      success: true,
+      data: {
+        word,
+        deleted: {
+          word_record: true,
+          contexts: contextsResult.deletedCount,
+          review_logs: logsResult.deletedCount
+        }
+      },
+      meta: {
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('[SR API] Error deleting word:', error);
+    res.status(500).json({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to delete word',
+        details: error.message
+      }
+    });
+  }
+});
+
+/**
  * GET /api/sr/contexts/:word
  * 获取单词的例句上下文
  */

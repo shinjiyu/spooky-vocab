@@ -274,6 +274,135 @@
       margin-bottom: 20px;
     }
 
+    /* 单词列表样式 */
+    .word-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .word-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      border-bottom: 1px solid #eee;
+      transition: background 0.2s;
+    }
+
+    .word-item:hover {
+      background: #f8f9fa;
+    }
+
+    .word-item:last-child {
+      border-bottom: none;
+    }
+
+    .word-item-info {
+      flex: 1;
+    }
+
+    .word-item-word {
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+    }
+
+    .word-item-meta {
+      font-size: 12px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    .word-item-state {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+
+    .state-0 { background: #e3f2fd; color: #1976d2; }
+    .state-1 { background: #fff3e0; color: #f57c00; }
+    .state-2 { background: #e8f5e9; color: #388e3c; }
+    .state-3 { background: #ffebee; color: #d32f2f; }
+
+    .word-item-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .btn-icon-delete {
+      background: #ffebee;
+      color: #d32f2f;
+    }
+
+    .btn-icon-delete:hover {
+      background: #ffcdd2;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid #667eea;
+      background: white;
+      color: #667eea;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-color: transparent;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .pagination button {
+      padding: 8px 16px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .pagination button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .pagination span {
+      padding: 8px 16px;
+      color: #666;
+    }
+
     .user-bar {
       display: flex;
       justify-content: space-between;
@@ -378,8 +507,36 @@
           </div>
         </div>
         <button class="btn btn-primary" onclick="app.startReview()">开始复习</button>
-        <button class="btn btn-secondary" onclick="app.loadStats()">刷新统计</button>
-        <button class="btn btn-secondary" onclick="app.refreshWords()" style="margin-top: 10px;">🔄 刷新单词列表</button>
+        <button class="btn btn-secondary" onclick="app.showWordList()">📚 查看全部单词</button>
+        <button class="btn btn-secondary" onclick="app.loadStats()" style="margin-top: 10px;">🔄 刷新统计</button>
+      </div>
+
+      <!-- 单词列表卡片 -->
+      <div class="card hidden" id="wordListCard">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="color: #333;">📚 单词列表</h3>
+          <button class="btn-icon" onclick="app.hideWordList()" style="background: #f5f5f5;">✕</button>
+        </div>
+        
+        <div class="tabs">
+          <button class="tab-btn active" data-state="" onclick="app.filterWordList(this, '')">全部</button>
+          <button class="tab-btn" data-state="0" onclick="app.filterWordList(this, 0)">新</button>
+          <button class="tab-btn" data-state="1" onclick="app.filterWordList(this, 1)">学习中</button>
+          <button class="tab-btn" data-state="2" onclick="app.filterWordList(this, 2)">复习</button>
+        </div>
+        
+        <div id="wordListLoading" class="loading">加载中...</div>
+        <div id="wordListEmpty" class="empty-state hidden">
+          <div class="empty-state-icon">📭</div>
+          <p>暂无单词</p>
+        </div>
+        <div id="wordListContent" class="word-list hidden"></div>
+        
+        <div class="pagination" id="wordListPagination">
+          <button onclick="app.prevPage()">上一页</button>
+          <span id="pageInfo">1 / 1</span>
+          <button onclick="app.nextPage()">下一页</button>
+        </div>
       </div>
 
       <!-- 复习卡片 -->
@@ -414,6 +571,15 @@
             😎 Easy<br><small>轻松记起</small>
           </button>
         </div>
+        
+        <div style="margin-top: 15px; display: flex; gap: 10px;">
+          <button class="btn btn-secondary" onclick="app.deleteCurrentWord()" style="flex: 1; background: #ffebee; color: #d32f2f;">
+            🗑️ 删除此单词
+          </button>
+          <button class="btn btn-secondary" onclick="app.skipCard()" style="flex: 1;">
+            ⏭️ 跳过
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -432,6 +598,13 @@
       currentIndex: 0,
       reviewStartTime: null,
       loginInstance: null,
+      
+      // 单词列表状态
+      wordListData: [],
+      wordListPage: 0,
+      wordListLimit: 30,
+      wordListTotal: 0,
+      wordListStateFilter: '',
 
       // ============ 初始化 ============
       
@@ -721,6 +894,210 @@
           this.loadStats();
         } else {
           this.showCard(this.cards[this.currentIndex]);
+        }
+      },
+
+      skipCard() {
+        // 将当前卡片移到队列末尾
+        if (this.currentCard && this.cards.length > 1) {
+          const skipped = this.cards.splice(this.currentIndex, 1)[0];
+          this.cards.push(skipped);
+          
+          // 显示下一张（索引不变，因为数组已经变了）
+          if (this.currentIndex >= this.cards.length) {
+            this.currentIndex = 0;
+          }
+          this.showCard(this.cards[this.currentIndex]);
+        }
+      },
+
+      async deleteCurrentWord() {
+        if (!this.currentCard) return;
+        
+        const word = this.currentCard.word;
+        await this.deleteWord(word);
+        
+        // 如果还有卡片，显示下一张
+        if (this.cards.length > 0) {
+          if (this.currentIndex >= this.cards.length) {
+            this.currentIndex = this.cards.length - 1;
+          }
+          this.showCard(this.cards[this.currentIndex]);
+        } else {
+          document.getElementById('reviewCard').classList.add('hidden');
+          alert('🎉 所有单词已处理完成！');
+        }
+      },
+
+      // ============ 单词列表 ============
+
+      async showWordList() {
+        document.getElementById('wordListCard').classList.remove('hidden');
+        document.getElementById('reviewCard').classList.add('hidden');
+        this.wordListPage = 0;
+        this.wordListStateFilter = '';
+        await this.loadWordList();
+      },
+
+      hideWordList() {
+        document.getElementById('wordListCard').classList.add('hidden');
+      },
+
+      async loadWordList() {
+        const loadingEl = document.getElementById('wordListLoading');
+        const emptyEl = document.getElementById('wordListEmpty');
+        const contentEl = document.getElementById('wordListContent');
+        
+        loadingEl.classList.remove('hidden');
+        emptyEl.classList.add('hidden');
+        contentEl.classList.add('hidden');
+
+        try {
+          const offset = this.wordListPage * this.wordListLimit;
+          let url = `/api/sr/words?limit=${this.wordListLimit}&offset=${offset}&sort=created_at&order=desc`;
+          
+          if (this.wordListStateFilter !== '') {
+            url += `&state=${this.wordListStateFilter}`;
+          }
+          
+          const response = await this.apiRequest(url);
+          
+          if (response.success) {
+            this.wordListData = response.data.words;
+            this.wordListTotal = response.data.pagination.total;
+            
+            loadingEl.classList.add('hidden');
+            
+            if (this.wordListData.length === 0) {
+              emptyEl.classList.remove('hidden');
+            } else {
+              contentEl.classList.remove('hidden');
+              this.renderWordList();
+            }
+            
+            this.updatePagination();
+          }
+        } catch (error) {
+          loadingEl.classList.add('hidden');
+          alert('加载单词列表失败：' + error.message);
+        }
+      },
+
+      renderWordList() {
+        const contentEl = document.getElementById('wordListContent');
+        
+        contentEl.innerHTML = this.wordListData.map(word => `
+          <div class="word-item" data-word="${word.word}">
+            <div class="word-item-info">
+              <div class="word-item-word">${word.word}</div>
+              <div class="word-item-meta">
+                <span class="word-item-state state-${word.state}">${word.state_name}</span>
+                复习 ${word.reps} 次 | 
+                ${word.is_due ? '🔴 待复习' : '⏰ ' + this.formatDueDate(word.due_date)}
+              </div>
+            </div>
+            <div class="word-item-actions">
+              <button class="btn-icon btn-icon-delete" onclick="app.deleteWord('${word.word}')" title="删除单词">🗑️</button>
+            </div>
+          </div>
+        `).join('');
+      },
+
+      formatDueDate(dueDate) {
+        if (!dueDate) return '未安排';
+        const date = new Date(dueDate);
+        const now = new Date();
+        const diffDays = Math.ceil((date - now) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 0) return '今天';
+        if (diffDays === 1) return '明天';
+        if (diffDays <= 7) return `${diffDays}天后`;
+        return date.toLocaleDateString('zh-CN');
+      },
+
+      updatePagination() {
+        const totalPages = Math.ceil(this.wordListTotal / this.wordListLimit);
+        const currentPage = this.wordListPage + 1;
+        
+        document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages || 1}`;
+        
+        const pagination = document.getElementById('wordListPagination');
+        const buttons = pagination.querySelectorAll('button');
+        buttons[0].disabled = this.wordListPage === 0;
+        buttons[1].disabled = this.wordListPage >= totalPages - 1;
+      },
+
+      async prevPage() {
+        if (this.wordListPage > 0) {
+          this.wordListPage--;
+          await this.loadWordList();
+        }
+      },
+
+      async nextPage() {
+        const totalPages = Math.ceil(this.wordListTotal / this.wordListLimit);
+        if (this.wordListPage < totalPages - 1) {
+          this.wordListPage++;
+          await this.loadWordList();
+        }
+      },
+
+      async filterWordList(btn, state) {
+        // 更新 tab 样式
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        this.wordListStateFilter = state;
+        this.wordListPage = 0;
+        await this.loadWordList();
+      },
+
+      async deleteWord(word) {
+        if (!confirm(`确定要删除单词 "${word}" 吗？\n\n删除后将无法恢复，包括所有复习记录。`)) {
+          return;
+        }
+
+        try {
+          const response = await this.apiRequest(`/api/sr/words/${encodeURIComponent(word)}`, {
+            method: 'DELETE'
+          });
+
+          if (response.success) {
+            alert(`✅ 已删除单词: ${word}`);
+            
+            // 从当前列表中移除
+            this.wordListData = this.wordListData.filter(w => w.word !== word);
+            this.wordListTotal--;
+            
+            // 如果当前复习的就是这个词，跳到下一个
+            if (this.currentCard && this.currentCard.word === word) {
+              this.cards = this.cards.filter(c => c.word !== word);
+              if (this.currentIndex >= this.cards.length) {
+                this.currentIndex = this.cards.length - 1;
+              }
+              if (this.cards.length > 0) {
+                this.showCard(this.cards[this.currentIndex]);
+              } else {
+                document.getElementById('reviewCard').classList.add('hidden');
+              }
+            }
+            
+            // 重新渲染列表
+            if (this.wordListData.length === 0 && this.wordListPage > 0) {
+              this.wordListPage--;
+              await this.loadWordList();
+            } else if (this.wordListData.length === 0) {
+              document.getElementById('wordListContent').classList.add('hidden');
+              document.getElementById('wordListEmpty').classList.remove('hidden');
+            } else {
+              this.renderWordList();
+            }
+            
+            this.updatePagination();
+            this.loadStats();
+          }
+        } catch (error) {
+          alert('删除失败：' + error.message);
         }
       },
 
