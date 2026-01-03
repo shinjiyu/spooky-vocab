@@ -77,6 +77,12 @@ const replacements = [
     ]
   },
   {
+    file: 'extension/popup/popup.html',
+    rules: [
+      { pattern: /href="https:\/\/[^"]+\/vocab-review\/"/, replacement: `href="${config.review.url}"` }
+    ]
+  },
+  {
     file: 'releases/store-description.md',
     rules: [
       { pattern: /https:\/\/[^\/\s]+\/vocab-api/g, replacement: config.api.baseUrl },

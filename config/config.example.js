@@ -42,6 +42,11 @@ module.exports = {
   privacy: {
     url: 'https://your-domain.com/vocab-api/public/privacy.html',
     email: 'support@your-domain.com'
+  },
+  
+  // 复习工具
+  review: {
+    url: 'https://your-domain.com/vocab-review/'
   }
 };
 

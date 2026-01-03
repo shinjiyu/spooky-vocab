@@ -6,7 +6,7 @@
   <title>Spooky Vocab - 复习系统</title>
   <!-- 引入 Auth SDK (ES Module) -->
   <script type="module">
-    import { loginView } from 'https://kuroneko.chat/sdk/login.js';
+    import { loginView } from 'https://your-domain.com/sdk/login.js';
     window.KuronekoAuth = { loginView };
     window.dispatchEvent(new Event('sdk-loaded'));
   </script>
@@ -587,8 +587,8 @@
   <script>
     const app = {
       // 配置
-      apiUrl: 'https://kuroneko.chat/vocab-api',
-      authUrl: 'https://kuroneko.chat',
+      apiUrl: 'https://your-domain.com/vocab-api',
+      authUrl: 'https://your-domain.com',
       
       // 状态
       token: '',
